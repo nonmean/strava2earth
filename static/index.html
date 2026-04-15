@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strava2Earth</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+
+    .logo { font-weight: 700; font-size: 1.1rem; color: #fc4c02; white-space: nowrap; }
+    .athlete-name { color: #aaa; font-size: 0.85rem; }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    label { font-size: 0.8rem; color: #888; white-space: nowrap; }
+
+    input[type="date"], input[type="text"], input[type="password"], select {
+      background: #0f3460;
+      border: 1px solid #1a4a8a;
+      color: #e0e0e0;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      outline: none;
+      border-color: #fc4c02;
+    }
+
+    select option { background: #0f3460; }
+
+    button {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+
+    .btn-primary { background: #fc4c02; color: #fff; }
+    .btn-primary:hover { background: #e04000; }
+    .btn-primary:disabled { background: #8a3000; cursor: default; }
+    .btn-secondary { background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a8a; }
+    .btn-secondary:hover { background: #1a4a8a; }
+    .btn-danger { background: #c0392b; color: #fff; }
+    .btn-danger:hover { background: #a93226; }
+
+    /* ── Stats bar ── */
+    #stats-bar {
+      background: #12192a;
+      padding: 5px 16px;
+      font-size: 0.78rem;
+      color: #888;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      border-bottom: 1px solid #0f3460;
+      flex-shrink: 0;
+    }
+    #stats-bar span { color: #ccc; }
+
+    /* ── Full-page panels (setup / login) ── */
+    .full-panel {
+      display: none;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      text-align: center;
+      padding: 24px;
+      min-height: 0;
+    }
+    .full-panel.visible { display: flex; }
+
+    .panel-title { font-size: 2rem; font-weight: 700; color: #fc4c02; }
+    .panel-sub { color: #888; max-width: 400px; line-height: 1.6; font-size: 0.95rem; }
+
+    /* ── Setup form card ── */
+    .setup-card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 10px;
+      padding: 28px 32px;
+      width: 100%;
+      max-width: 420px;
+      text-align: left;
+    }
+
+    .setup-card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #ccc;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #0f3460;
+    }
+
+    .field-row { margin-bottom: 16px; }
+
+    .field-row label {
+      display: block;
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 5px;
+    }
+
+    .field-row input { width: 100%; padding: 8px 10px; font-size: 0.9rem; }
+
+    .field-hint { font-size: 0.72rem; color: #556; margin-top: 4px; }
+
+    .setup-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .setup-actions button { flex: 1; padding: 9px; font-size: 0.9rem; }
+
+    .setup-error {
+      background: rgba(192, 57, 43, 0.15);
+      border: 1px solid #c0392b;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      color: #e74c3c;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .lock-icon { font-size: 2.5rem; margin-bottom: -8px; }
+
+    .btn-strava {
+      background: #fc4c02;
+      color: #fff;
+      padding: 12px 28px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 1rem;
+      display: inline-block;
+    }
+    .btn-strava:hover { background: #e04000; }
+
+    /* ── Login page credential card ── */
+    .cred-card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.85rem;
+      color: #aaa;
+      max-width: 340px;
+      width: 100%;
+    }
+
+    .cred-card .cred-label { color: #556; font-size: 0.75rem; margin-bottom: 2px; }
+    .cred-card .cred-value { color: #e0e0e0; font-weight: 600; font-family: monospace; }
+    .cred-icon { font-size: 1.4rem; flex-shrink: 0; }
+
+    .cred-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #1a4a8a;
+      color: #aaa;
+      font-size: 0.8rem;
+      padding: 6px 14px;
+    }
+    .btn-outline:hover { background: #0f3460; color: #e0e0e0; }
+
+    .btn-outline-danger {
+      background: transparent;
+      border: 1px solid #7a2020;
+      color: #e07070;
+      font-size: 0.8rem;
+      padding: 6px 14px;
+    }
+    .btn-outline-danger:hover { background: rgba(192,57,43,0.15); }
+
+    /* ── Map + Sidebar wrapper ── */
+    #map-wrapper {
+      flex: 1;
+      display: none;          /* shown via JS once authenticated */
+      min-height: 0;
+      position: relative;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 280px;
+      background: #131b2e;
+      border-right: 1px solid #0f3460;
+      display: flex;
+      flex-direction: column;
+      z-index: 400;
+      transition: transform 0.25s ease;
+    }
+
+    #sidebar.collapsed { transform: translateX(-280px); }
+
+    #sidebar-header {
+      padding: 9px 12px;
+      border-bottom: 1px solid #0f3460;
+      font-size: 0.75rem;
+      color: #667;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    #sidebar-count { color: #aaa; }
+
+    #sidebar-search {
+      width: 100%;
+      background: #0d1626;
+      border: none;
+      border-bottom: 1px solid #0f3460;
+      color: #e0e0e0;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      outline: none;
+      flex-shrink: 0;
+    }
+    #sidebar-search::placeholder { color: #445; }
+
+    #sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    #sidebar-list::-webkit-scrollbar { width: 4px; }
+    #sidebar-list::-webkit-scrollbar-track { background: transparent; }
+    #sidebar-list::-webkit-scrollbar-thumb { background: #1a4a8a; border-radius: 2px; }
+
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      padding: 9px 12px;
+      border-bottom: 1px solid #0d1828;
+      cursor: pointer;
+      transition: background 0.1s;
+      border-left: 3px solid transparent;
+    }
+
+    .activity-item:hover { background: #1a2a46; }
+
+    .activity-item.active {
+      background: #162040;
+      border-left-color: #fc4c02;
+    }
+
+    .activity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+
+    .activity-info { min-width: 0; flex: 1; }
+
+    .activity-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #ddd;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .activity-meta {
+      font-size: 0.71rem;
+      color: #556;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-empty {
+      padding: 24px 12px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #445;
+    }
+
+    /* ── Sidebar toggle button ── */
+    #sidebar-toggle {
+      position: absolute;
+      top: 50%;
+      left: 280px;
+      transform: translateY(-50%);
+      z-index: 401;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-left: none;
+      color: #888;
+      padding: 8px 4px;
+      cursor: pointer;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.75rem;
+      line-height: 1;
+      transition: left 0.25s ease;
+      writing-mode: vertical-rl;
+      letter-spacing: 1px;
+    }
+
+    #sidebar-toggle:hover { background: #1a4a8a; color: #fff; }
+    #sidebar.collapsed ~ #sidebar-toggle { left: 0; }
+
+    /* ── Map ── */
+    #map {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      left: 280px;
+      transition: left 0.25s ease;
+    }
+
+    #sidebar.collapsed ~ #sidebar-toggle ~ #map,
+    #map.full { left: 0; }
+
+    /* ── Sync progress overlay ── */
+    #sync-overlay {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 12px 16px;
+      z-index: 2000;
+      min-width: 220px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #sync-overlay.visible { display: block; }
+
+    .sync-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: #fc4c02; }
+
+    .progress-bar {
+      background: #0f3460;
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+      margin: 6px 0;
+    }
+    .progress-fill { background: #fc4c02; height: 100%; transition: width 0.3s ease; }
+    .sync-detail { font-size: 0.75rem; color: #888; }
+
+    /* ── Popup ── */
+    .leaflet-popup-content-wrapper {
+      background: #16213e;
+      color: #e0e0e0;
+      border: 1px solid #0f3460;
+    }
+    .leaflet-popup-tip { background: #16213e; }
+    .popup-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+    .popup-row { font-size: 0.8rem; color: #aaa; margin-top: 2px; }
+    .popup-row span { color: #e0e0e0; }
+
+    /* ── Legend ── */
+    #legend {
+      position: absolute;
+      bottom: 30px;
+      right: 10px;
+      background: rgba(22, 33, 62, 0.92);
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 8px 12px;
+      z-index: 500;
+      font-size: 0.75rem;
+      max-width: 140px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+    .legend-swatch { width: 20px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ── Step 1: Setup ── -->
+<div id="setup-page" class="full-panel">
+  <div class="lock-icon">&#128274;</div>
+  <div class="panel-title">Strava2Earth</div>
+  <p class="panel-sub">Enter your Strava API credentials to get started. They are stored encrypted on your machine and never transmitted.</p>
+
+  <div class="setup-card">
+    <h2>Strava API Credentials</h2>
+    <div class="field-row">
+      <label for="input-client-id">Client ID</label>
+      <input type="text" id="input-client-id" placeholder="e.g. 12345" autocomplete="off" spellcheck="false">
+      <div class="field-hint">Found at strava.com/settings/api</div>
+    </div>
+    <div class="field-row">
+      <label for="input-client-secret">Client Secret</label>
+      <input type="password" id="input-client-secret" placeholder="Your client secret" autocomplete="off">
+      <div class="field-hint">Stored encrypted — not readable as plain text</div>
+    </div>
+    <div class="setup-actions">
+      <button class="btn-primary" id="setup-save-btn" onclick="saveCredentials()">Save &amp; Continue</button>
+    </div>
+    <div class="setup-error" id="setup-error"></div>
+  </div>
+
+  <p style="font-size:0.75rem; color:#445; max-width:400px; line-height:1.5;">
+    Create a Strava API app at <strong style="color:#667">strava.com/settings/api</strong>.
+    Set the Authorization Callback Domain to <strong style="color:#667">localhost</strong>.
+  </p>
+</div>
+
+<!-- ── Step 2: Connect Strava account ── -->
+<div id="login-page" class="full-panel">
+  <div class="panel-title">Strava2Earth</div>
+  <p class="panel-sub">Connect your Strava account to authorize access to your activities.</p>
+
+  <div class="cred-card">
+    <div class="cred-icon">&#128273;</div>
+    <div>
+      <div class="cred-label">Strava Client ID</div>
+      <div class="cred-value" id="login-client-id">—</div>
+    </div>
+  </div>
+
+  <a href="/auth/login" class="btn-strava">Connect with Strava</a>
+
+  <div class="cred-actions">
+    <button class="btn-outline" onclick="useNewCredential()">Use new credential</button>
+    <button class="btn-outline-danger" onclick="deleteCredential()">Delete credential</button>
+  </div>
+</div>
+
+<!-- ── Step 3: Main app ── -->
+<header id="app-header" style="display:none">
+  <div class="logo">Strava2Earth</div>
+  <div class="athlete-name" id="athlete-name"></div>
+
+  <div class="filters">
+    <label>From</label>
+    <input type="date" id="filter-from" onchange="applyFilters()">
+    <label>To</label>
+    <input type="date" id="filter-to" onchange="applyFilters()">
+    <label>Country</label>
+    <select id="filter-country" onchange="onCountryChange()">
+      <option value="">All countries</option>
+    </select>
+    <label>City</label>
+    <select id="filter-city" onchange="applyFilters()">
+      <option value="">All cities</option>
+    </select>
+    <button class="btn-secondary" onclick="clearFilters()">Clear</button>
+  </div>
+
+  <button class="btn-secondary" id="sync-btn" onclick="startSync()">Sync Strava</button>
+  <button class="btn-danger" onclick="logout()" style="margin-left:4px">Logout</button>
+</header>
+
+<div id="stats-bar" style="display:none">
+  <span id="stat-routes">0 routes</span>
+  <span>|</span>
+  <span id="stat-distance">0 km total</span>
+  <span>|</span>
+  <span id="stat-cached">Loading cache info…</span>
+</div>
+
+<!-- ── Map + Sidebar ── -->
+<div id="map-wrapper">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <span id="sidebar-count">0 activities</span>
+      <span id="sidebar-hint" style="font-size:0.7rem;color:#445">click to focus</span>
+    </div>
+    <input id="sidebar-search" type="text" placeholder="Search activities…" oninput="filterSidebar(this.value)">
+    <div id="sidebar-list"></div>
+  </div>
+
+  <button id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">&#x25C4;</button>
+
+  <div id="map"></div>
+  <div id="legend" style="display:none"></div>
+</div>
+
+<!-- Sync progress overlay -->
+<div id="sync-overlay">
+  <div class="sync-title">Syncing from Strava…</div>
+  <div class="progress-bar"><div class="progress-fill" id="sync-progress-fill" style="width:0%"></div></div>
+  <div class="sync-detail" id="sync-detail">Starting…</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let map = null;
+let routeLayer = null;
+let syncPoller = null;
+let layerById = {};       // activity id → leaflet layer
+let activeId = null;      // currently selected activity id
+let allFeatures = [];     // full unfiltered feature list (for sidebar search)
+let sidebarCollapsed = false;
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+async function init() {
+  const status = await apiFetch('/api/status');
+  if (!status) return;
+
+  if (!status.configured) {
+    show('setup-page');
+    document.getElementById('input-client-id').focus();
+    return;
+  }
+
+  if (!status.authenticated) {
+    showLoginPage(status.client_id);
+    return;
+  }
+
+  showApp(status);
+}
+
+function show(pageId) {
+  ['setup-page', 'login-page'].forEach(id => {
+    document.getElementById(id).classList.toggle('visible', id === pageId);
+  });
+}
+
+function showLoginPage(clientId) {
+  document.getElementById('login-client-id').textContent = clientId || '—';
+  show('login-page');
+}
+
+function showApp(status) {
+  ['setup-page', 'login-page'].forEach(id =>
+    document.getElementById(id).classList.remove('visible')
+  );
+  document.getElementById('app-header').style.display = 'flex';
+  document.getElementById('stats-bar').style.display = 'flex';
+  document.getElementById('map-wrapper').style.display = 'block';
+  document.getElementById('legend').style.display = 'none';
+
+  if (status.athlete_name) {
+    document.getElementById('athlete-name').textContent = status.athlete_name;
+  }
+
+  if (!map) initMap();
+
+  const today = new Date();
+  const yearAgo = new Date(today);
+  yearAgo.setFullYear(today.getFullYear() - 1);
+  document.getElementById('filter-to').value = formatDate(today);
+  document.getElementById('filter-from').value = formatDate(yearAgo);
+
+  loadCountries().then(() => loadCities()).then(() => loadRoutes());
+  updateCacheStats(status.sync);
+
+  if (status.sync && status.sync.running) {
+    showSyncOverlay();
+    startSyncPoller();
+  }
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+async function saveCredentials() {
+  const clientId = document.getElementById('input-client-id').value.trim();
+  const clientSecret = document.getElementById('input-client-secret').value.trim();
+  const btn = document.getElementById('setup-save-btn');
+
+  document.getElementById('setup-error').style.display = 'none';
+
+  if (!clientId || !clientSecret) {
+    showSetupError('Both Client ID and Client Secret are required.');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const result = await apiFetch('/api/setup/credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Save & Continue';
+
+  if (!result) { showSetupError('Failed to save credentials. Check the server log.'); return; }
+  showLoginPage(clientId);
+}
+
+function showSetupError(msg) {
+  const el = document.getElementById('setup-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('setup-page').classList.contains('visible')) {
+    saveCredentials();
+  }
+});
+
+// Called from login page — clear old credential and go to setup form for a new one
+async function useNewCredential() {
+  await apiFetch('/api/setup/clear', { method: 'POST' });
+  document.getElementById('input-client-id').value = '';
+  document.getElementById('input-client-secret').value = '';
+  document.getElementById('setup-error').style.display = 'none';
+  show('setup-page');
+  document.getElementById('input-client-id').focus();
+}
+
+// Called from login page — delete credential only, return to setup page
+async function deleteCredential() {
+  await apiFetch('/api/setup/clear', { method: 'POST' });
+  document.getElementById('input-client-id').value = '';
+  document.getElementById('input-client-secret').value = '';
+  document.getElementById('setup-error').style.display = 'none';
+  show('setup-page');
+  document.getElementById('input-client-id').focus();
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { preferCanvas: true }).setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+}
+
+async function loadRoutes() {
+  const from = document.getElementById('filter-from').value;
+  const to = document.getElementById('filter-to').value;
+  const country = document.getElementById('filter-country').value;
+
+  const city = document.getElementById('filter-city').value;
+
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (country) params.set('country', country);
+  if (city) params.set('city', city);
+
+  const geojson = await apiFetch('/api/routes?' + params.toString());
+  if (!geojson) return;
+
+  // Clear previous state
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  layerById = {};
+  activeId = null;
+  document.getElementById('sidebar-search').value = '';
+
+  if (!geojson.features || geojson.features.length === 0) {
+    updateStats(0, 0);
+    buildSidebar([]);
+    return;
+  }
+
+  // Sort newest-first for the sidebar
+  allFeatures = [...geojson.features].sort((a, b) =>
+    (b.properties.start_date || '').localeCompare(a.properties.start_date || '')
+  );
+
+  routeLayer = L.geoJSON(geojson, {
+    style: f => ({ color: f.properties.color || '#fc4c02', weight: 2, opacity: 0.6 }),
+    onEachFeature: (feature, layer) => {
+      const p = feature.properties;
+
+      layer.bindPopup(`
+        <div class="popup-name">${escapeHtml(p.name)}</div>
+        <div class="popup-row">Sport: <span>${p.sport_type}</span></div>
+        <div class="popup-row">Date: <span>${p.start_date ? p.start_date.slice(0,10) : ''}</span></div>
+        <div class="popup-row">Distance: <span>${p.distance_km} km</span></div>
+        <div class="popup-row">Duration: <span>${formatDuration(p.elapsed_time)}</span></div>
+        ${p.country ? `<div class="popup-row">Country: <span>${escapeHtml(p.country)}</span></div>` : ''}
+      `);
+
+      layer.on('click', () => focusActivity(p.id, false));
+      layer.on('mouseover', function() {
+        if (p.id !== activeId) this.setStyle({ weight: 3, opacity: 1 });
+      });
+      layer.on('mouseout', function() {
+        if (p.id !== activeId) this.setStyle({ weight: 2, opacity: 0.6 });
+      });
+
+      layerById[p.id] = layer;
+    },
+  }).addTo(map);
+
+  try { map.fitBounds(routeLayer.getBounds(), { padding: [20, 20] }); } catch(e) {}
+
+  let totalKm = 0;
+  geojson.features.forEach(f => { totalKm += f.properties.distance_km || 0; });
+  updateStats(geojson.features.length, totalKm);
+  buildLegend(geojson.features);
+  buildSidebar(allFeatures);
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function buildSidebar(features) {
+  const list = document.getElementById('sidebar-list');
+  document.getElementById('sidebar-count').textContent =
+    features.length === 1 ? '1 activity' : `${features.length} activities`;
+
+  if (features.length === 0) {
+    list.innerHTML = '<div class="sidebar-empty">No activities match the current filters.</div>';
+    return;
+  }
+
+  list.innerHTML = features.map(f => {
+    const p = f.properties;
+    const date = p.start_date ? p.start_date.slice(0, 10) : '';
+    const dist = p.distance_km ? `${p.distance_km} km` : '';
+    const dur = p.elapsed_time ? formatDuration(p.elapsed_time) : '';
+    const meta = [date, dist, dur].filter(Boolean).join(' · ');
+
+    return `<div class="activity-item${p.id === activeId ? ' active' : ''}"
+                 data-id="${p.id}"
+                 onclick="focusActivity(${p.id}, true)">
+      <div class="activity-dot" style="background:${p.color || '#888'}"></div>
+      <div class="activity-info">
+        <div class="activity-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+        <div class="activity-meta">${escapeHtml(meta)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Scroll active item into view
+  if (activeId) scrollSidebarToActive();
+}
+
+function filterSidebar(query) {
+  const q = query.toLowerCase().trim();
+  const filtered = q
+    ? allFeatures.filter(f => f.properties.name.toLowerCase().includes(q))
+    : allFeatures;
+  buildSidebar(filtered);
+}
+
+// ── Focus an activity ─────────────────────────────────────────────────────────
+function focusActivity(id, scrollSidebar) {
+  const layer = layerById[id];
+  if (!layer) return;
+
+  // Deselect previous
+  if (activeId && layerById[activeId]) {
+    layerById[activeId].setStyle({ weight: 2, opacity: 0.6 });
+  }
+  const prevEl = document.querySelector('.activity-item.active');
+  if (prevEl) prevEl.classList.remove('active');
+
+  // Select new
+  activeId = id;
+  layer.setStyle({ weight: 4, opacity: 1 });
+  layer.bringToFront();
+
+  try {
+    const bounds = layer.getBounds();
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+    layer.openPopup(bounds.getCenter());
+  } catch(e) {}
+
+  // Highlight sidebar item
+  const el = document.querySelector(`.activity-item[data-id="${id}"]`);
+  if (el) {
+    el.classList.add('active');
+    if (scrollSidebar) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function scrollSidebarToActive() {
+  const el = document.querySelector('.activity-item.active');
+  if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+// ── Sidebar toggle ────────────────────────────────────────────────────────────
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  const sidebar = document.getElementById('sidebar');
+  const toggle = document.getElementById('sidebar-toggle');
+  const mapEl = document.getElementById('map');
+
+  sidebar.classList.toggle('collapsed', sidebarCollapsed);
+  mapEl.style.left = sidebarCollapsed ? '0' : '280px';
+  toggle.style.left = sidebarCollapsed ? '0' : '280px';
+  toggle.textContent = sidebarCollapsed ? '▶' : '◀';
+
+  // Leaflet needs to know the map size changed
+  setTimeout(() => map && map.invalidateSize(), 260);
+}
+
+// ── Legend ────────────────────────────────────────────────────────────────────
+function buildLegend(features) {
+  const sports = {};
+  features.forEach(f => { const s = f.properties.sport_type; if (!sports[s]) sports[s] = f.properties.color; });
+  const el = document.getElementById('legend');
+  if (Object.keys(sports).length === 0) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = Object.entries(sports)
+    .map(([sport, color]) => `<div class="legend-item"><div class="legend-swatch" style="background:${color}"></div>${sport}</div>`)
+    .join('');
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────────
+async function loadCountries() {
+  const countries = await apiFetch('/api/countries');
+  if (!countries) return;
+  const sel = document.getElementById('filter-country');
+  const current = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  countries.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    if (c === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadCities(country) {
+  const url = country ? `/api/cities?country=${encodeURIComponent(country)}` : '/api/cities';
+  const cities = await apiFetch(url);
+  if (!cities) return;
+  const sel = document.getElementById('filter-city');
+  const current = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  cities.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    if (c === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  // If the previously selected city no longer exists in the new list, clear it
+  if (current && !cities.includes(current)) sel.value = '';
+}
+
+async function onCountryChange() {
+  const country = document.getElementById('filter-country').value;
+  // Reset city selection and repopulate for the chosen country
+  document.getElementById('filter-city').value = '';
+  await loadCities(country || undefined);
+  applyFilters();
+}
+
+function applyFilters() { loadRoutes(); }
+
+function clearFilters() {
+  document.getElementById('filter-from').value = '';
+  document.getElementById('filter-to').value = '';
+  document.getElementById('filter-country').value = '';
+  document.getElementById('filter-city').value = '';
+  loadCities();   // repopulate cities without country constraint
+  loadRoutes();
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function startSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  await apiFetch('/api/sync');
+  showSyncOverlay();
+  startSyncPoller();
+}
+
+function showSyncOverlay() { document.getElementById('sync-overlay').classList.add('visible'); }
+function hideSyncOverlay()  { document.getElementById('sync-overlay').classList.remove('visible'); }
+
+function startSyncPoller() {
+  if (syncPoller) return;
+  syncPoller = setInterval(async () => {
+    const s = await apiFetch('/api/sync/status');
+    if (!s) return;
+    const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+    document.getElementById('sync-progress-fill').style.width = pct + '%';
+    document.getElementById('sync-detail').textContent = `${s.done} / ${s.total} activities (${s.errors} errors)`;
+    if (!s.running) {
+      clearInterval(syncPoller); syncPoller = null;
+      const btn = document.getElementById('sync-btn');
+      btn.disabled = false; btn.textContent = 'Sync Strava';
+      hideSyncOverlay();
+      await loadCountries();
+      await loadCities(document.getElementById('filter-country').value || undefined);
+      await loadRoutes();
+    }
+  }, 2000);
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats(count, totalKm) {
+  document.getElementById('stat-routes').textContent = `${count} routes`;
+  document.getElementById('stat-distance').textContent = `${Math.round(totalKm).toLocaleString()} km total`;
+}
+
+function updateCacheStats(sync) {
+  if (!sync) return;
+  const cached = sync.done || 0;
+  const total = sync.total || 0;
+  document.getElementById('stat-cached').textContent =
+    total > 0 ? `${cached}/${total} activities cached` : 'No cache yet — click "Sync Strava"';
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function logout() { window.location.href = '/auth/logout'; }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+async function apiFetch(url, opts) {
+  try {
+    const resp = await fetch(url, opts);
+    if (resp.status === 401) return null;
+    if (!resp.ok) throw new Error(await resp.text());
+    return await resp.json();
+  } catch(e) {
+    console.error('apiFetch error:', url, e);
+    return null;
+  }
+}
+
+function formatDate(d) { return d.toISOString().slice(0, 10); }
+
+function formatDuration(seconds) {
+  if (!seconds) return '—';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Boot
+init();
+</script>
+</body>
+</html>
