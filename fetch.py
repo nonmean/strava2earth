@@ -91,6 +91,12 @@ def load_activities(force=False):
                 "start_latlng": a.get("start_latlng"),
                 "distance": a.get("distance", 0),
                 "elapsed_time": a.get("elapsed_time", 0),
+                "moving_time": a.get("moving_time", 0),
+                "total_elevation_gain": a.get("total_elevation_gain"),
+                "average_speed": a.get("average_speed"),
+                "max_speed": a.get("max_speed"),
+                "average_heartrate": a.get("average_heartrate"),
+                "max_heartrate": a.get("max_heartrate"),
                 "location_country": a.get("location_country") or "",
                 "location_city": a.get("location_city") or "",
             })
@@ -122,15 +128,18 @@ def _fetch_stream(activity_id):
     resp = requests.get(
         f"{STRAVA_API_BASE}/activities/{activity_id}/streams",
         headers=_headers(),
-        params={"keys": "latlng", "key_by_type": "true"},
+        params={"keys": "latlng,altitude,distance", "key_by_type": "true"},
         timeout=30,
     )
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
     data = resp.json()
-    latlng = data.get("latlng", {}).get("data", [])
-    return latlng
+    return {
+        "latlng": data.get("latlng", {}).get("data", []),
+        "altitude": data.get("altitude", {}).get("data", []),
+        "distance": data.get("distance", {}).get("data", []),
+    }
 
 
 def _reverse_geocode(lat, lng):
@@ -163,6 +172,19 @@ def _downsample(points, max_points=500):
     return [points[int(i * step)] for i in range(max_points)]
 
 
+def _downsample_streams(latlng, altitude, distance, max_points=500):
+    """Downsample latlng, altitude, and distance arrays together at the same indices."""
+    n = len(latlng)
+    if n <= max_points:
+        return latlng, altitude, distance
+    step = n / max_points
+    indices = [int(i * step) for i in range(max_points)]
+    ds_latlng = [latlng[i] for i in indices]
+    ds_alt = [round(altitude[i], 1) for i in indices] if len(altitude) == n else []
+    ds_dist = [round(distance[i], 1) for i in indices] if len(distance) == n else []
+    return ds_latlng, ds_alt, ds_dist
+
+
 def fetch_stream_for_activity(activity):
     """Fetch and cache GPS stream for a single activity. Returns stream dict or None."""
     aid = activity["id"]
@@ -172,9 +194,13 @@ def fetch_stream_for_activity(activity):
     if not activity.get("start_latlng"):
         return None  # no GPS
 
-    latlng = _fetch_stream(aid)
-    if not latlng:
+    stream_data = _fetch_stream(aid)
+    if not stream_data or not stream_data["latlng"]:
         return None
+
+    latlng, altitude, distance = _downsample_streams(
+        stream_data["latlng"], stream_data["altitude"], stream_data["distance"]
+    )
 
     country = activity.get("location_country", "")
     city = activity.get("location_city", "")
@@ -194,9 +220,17 @@ def fetch_stream_for_activity(activity):
         "start_date": activity["start_date"],
         "distance": activity["distance"],
         "elapsed_time": activity["elapsed_time"],
+        "moving_time": activity.get("moving_time", 0),
+        "total_elevation_gain": activity.get("total_elevation_gain"),
+        "average_speed": activity.get("average_speed"),
+        "max_speed": activity.get("max_speed"),
+        "average_heartrate": activity.get("average_heartrate"),
+        "max_heartrate": activity.get("max_heartrate"),
         "location_country": country,
         "location_city": city,
-        "latlng": _downsample(latlng),
+        "latlng": latlng,
+        "altitude": altitude,
+        "distance_stream": distance,
     }
 
     STREAMS_DIR.mkdir(parents=True, exist_ok=True)
@@ -403,6 +437,11 @@ def get_routes(from_date=None, to_date=None, country=None, city=None):
                 "start_date": stream["start_date"],
                 "distance_km": round(stream.get("distance", 0) / 1000, 2),
                 "elapsed_time": stream.get("elapsed_time", 0),
+                "moving_time": stream.get("moving_time") or 0,
+                "total_elevation_gain": stream.get("total_elevation_gain"),
+                "average_speed": stream.get("average_speed"),
+                "average_heartrate": stream.get("average_heartrate"),
+                "max_heartrate": stream.get("max_heartrate"),
                 "country": stream_country,
                 "city": stream_city,
                 "color": color,
@@ -417,6 +456,30 @@ def get_countries():
     countries = {(s.get("location_country") or "").strip() for s in _load_route_data()}
     countries.discard("")
     return sorted(countries)
+
+
+def clear_cache():
+    """Delete all cached activity and stream data."""
+    global _route_data, _route_data_mtime
+    if ACTIVITIES_FILE.exists():
+        ACTIVITIES_FILE.unlink()
+    if STREAMS_DIR.exists():
+        for p in STREAMS_DIR.glob("*.json"):
+            p.unlink()
+    _route_data = []
+    _route_data_mtime = 0.0
+
+
+def get_stream(activity_id):
+    """Return the cached stream dict for a single activity, or None if not cached."""
+    path = _stream_path(activity_id)
+    if not path.exists():
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def get_cities(country=None):

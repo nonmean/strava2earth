@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Strava2Earth</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -395,9 +396,49 @@
       border: 1px solid #0f3460;
     }
     .leaflet-popup-tip { background: #16213e; }
-    .popup-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
-    .popup-row { font-size: 0.8rem; color: #aaa; margin-top: 2px; }
+    .leaflet-popup-content { min-width: 190px; }
+    .popup-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+    .popup-row { font-size: 0.8rem; color: #aaa; margin-top: 3px; }
     .popup-row span { color: #e0e0e0; }
+    .popup-dim { font-size: 0.75rem; color: #667; margin-left: 4px; }
+
+    /* ── Elevation panel ── */
+    #elevation-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 320px;
+      background: rgba(18, 25, 42, 0.96);
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      z-index: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    #elevation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 10px 5px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #aaa;
+      border-bottom: 1px solid #0f3460;
+    }
+    #elevation-close {
+      background: none;
+      border: none;
+      color: #556;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    #elevation-close:hover { color: #aaa; }
+    #elevation-canvas-wrap {
+      padding: 6px 8px 8px;
+      height: 130px;
+    }
 
     /* ── Legend ── */
     #legend {
@@ -517,6 +558,16 @@
 
   <div id="map"></div>
   <div id="legend" style="display:none"></div>
+
+  <div id="elevation-panel" style="display:none">
+    <div id="elevation-header">
+      <span>Elevation Profile</span>
+      <button id="elevation-close" onclick="closeElevationChart()" title="Close">✕</button>
+    </div>
+    <div id="elevation-canvas-wrap">
+      <canvas id="elevation-canvas"></canvas>
+    </div>
+  </div>
 </div>
 
 <!-- Sync progress overlay -->
@@ -536,6 +587,7 @@ let layerById = {};       // activity id → leaflet layer
 let activeId = null;      // currently selected activity id
 let allFeatures = [];     // full unfiltered feature list (for sidebar search)
 let sidebarCollapsed = false;
+let elevationChart = null;
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 async function init() {
@@ -705,14 +757,7 @@ async function loadRoutes() {
     onEachFeature: (feature, layer) => {
       const p = feature.properties;
 
-      layer.bindPopup(`
-        <div class="popup-name">${escapeHtml(p.name)}</div>
-        <div class="popup-row">Sport: <span>${p.sport_type}</span></div>
-        <div class="popup-row">Date: <span>${p.start_date ? p.start_date.slice(0,10) : ''}</span></div>
-        <div class="popup-row">Distance: <span>${p.distance_km} km</span></div>
-        <div class="popup-row">Duration: <span>${formatDuration(p.elapsed_time)}</span></div>
-        ${p.country ? `<div class="popup-row">Country: <span>${escapeHtml(p.country)}</span></div>` : ''}
-      `);
+      layer.bindPopup(() => buildPopup(p));
 
       layer.on('click', () => focusActivity(p.id, false));
       layer.on('mouseover', function() {
@@ -799,12 +844,121 @@ function focusActivity(id, scrollSidebar) {
     layer.openPopup(bounds.getCenter());
   } catch(e) {}
 
+  loadElevationChart(id);
+
   // Highlight sidebar item
   const el = document.querySelector(`.activity-item[data-id="${id}"]`);
   if (el) {
     el.classList.add('active');
     if (scrollSidebar) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
+}
+
+// ── Popup content builder ─────────────────────────────────────────────────────
+function buildPopup(p) {
+  const avgSpeedKmh = p.average_speed
+    ? (p.average_speed * 3.6).toFixed(1)
+    : (p.distance_km && p.elapsed_time)
+      ? (p.distance_km / (p.elapsed_time / 3600)).toFixed(1)
+      : null;
+
+  const runLike = ['Run', 'TrailRun', 'Walk', 'Hike'].includes(p.sport_type);
+  let pace = null;
+  if (runLike && p.distance_km && p.elapsed_time) {
+    const secPerKm = p.elapsed_time / p.distance_km;
+    const m = Math.floor(secPerKm / 60);
+    const s = Math.round(secPerKm % 60);
+    pace = `${m}:${s.toString().padStart(2, '0')}/km`;
+  }
+
+  const movingDiff = p.moving_time && p.moving_time !== p.elapsed_time;
+  const location = [p.city, p.country].filter(Boolean).join(', ');
+
+  return `
+    <div class="popup-name">${escapeHtml(p.name)}</div>
+    <div class="popup-row">Sport: <span>${p.sport_type}</span></div>
+    <div class="popup-row">Date: <span>${p.start_date ? p.start_date.slice(0,10) : ''}</span></div>
+    <div class="popup-row">Distance: <span>${p.distance_km} km</span>${avgSpeedKmh ? `<span class="popup-dim">· ${avgSpeedKmh} km/h</span>` : ''}</div>
+    ${pace ? `<div class="popup-row">Pace: <span>${pace}</span></div>` : ''}
+    <div class="popup-row">Duration: <span>${formatDuration(p.elapsed_time)}</span>${movingDiff ? `<span class="popup-dim">· ${formatDuration(p.moving_time)} moving</span>` : ''}</div>
+    ${p.total_elevation_gain != null ? `<div class="popup-row">Elevation: <span>+${Math.round(p.total_elevation_gain)} m</span></div>` : ''}
+    ${p.average_heartrate ? `<div class="popup-row">Heart rate: <span>${Math.round(p.average_heartrate)} bpm avg</span>${p.max_heartrate ? `<span class="popup-dim">· ${Math.round(p.max_heartrate)} max</span>` : ''}</div>` : ''}
+    ${location ? `<div class="popup-row">Location: <span>${escapeHtml(location)}</span></div>` : ''}
+  `;
+}
+
+// ── Elevation chart ───────────────────────────────────────────────────────────
+async function loadElevationChart(id) {
+  const panel = document.getElementById('elevation-panel');
+  const data = await apiFetch(`/api/stream/${id}`);
+  if (!data || !data.altitude || data.altitude.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const distKm = data.distance_stream && data.distance_stream.length === data.altitude.length
+    ? data.distance_stream.map(d => Math.round(d / 10) / 100)
+    : data.altitude.map((_, i) => i);
+
+  if (elevationChart) { elevationChart.destroy(); elevationChart = null; }
+
+  const ctx = document.getElementById('elevation-canvas').getContext('2d');
+  elevationChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: distKm,
+      datasets: [{
+        data: data.altitude,
+        borderColor: '#fc4c02',
+        backgroundColor: 'rgba(252,76,2,0.1)',
+        fill: true,
+        pointRadius: 0,
+        borderWidth: 1.5,
+        tension: 0.3,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 250 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => `${items[0].label} km`,
+            label: item => `${item.raw} m`,
+          },
+          titleColor: '#aaa',
+          bodyColor: '#e0e0e0',
+          backgroundColor: 'rgba(15,52,96,0.95)',
+          borderColor: '#0f3460',
+          borderWidth: 1,
+          displayColors: false,
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: 'Distance (km)', color: '#667', font: { size: 9 } },
+          ticks: { color: '#667', font: { size: 9 }, maxTicksLimit: 6,
+            callback: v => v.toFixed(1) },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+        },
+        y: {
+          title: { display: true, text: 'Elevation (m)', color: '#667', font: { size: 9 } },
+          ticks: { color: '#667', font: { size: 9 }, maxTicksLimit: 4 },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+        },
+      },
+    },
+  });
+
+  panel.style.display = 'block';
+}
+
+function closeElevationChart() {
+  document.getElementById('elevation-panel').style.display = 'none';
+  if (elevationChart) { elevationChart.destroy(); elevationChart = null; }
 }
 
 function scrollSidebarToActive() {

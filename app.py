@@ -100,6 +100,20 @@ def api_routes():
     return jsonify(geojson)
 
 
+@app.route("/api/stream/<int:activity_id>")
+def api_stream(activity_id):
+    err = _require_auth()
+    if err:
+        return err
+    stream = fetch.get_stream(activity_id)
+    if not stream:
+        return jsonify({"altitude": [], "distance_stream": []})
+    return jsonify({
+        "altitude": stream.get("altitude", []),
+        "distance_stream": stream.get("distance_stream", []),
+    })
+
+
 @app.route("/api/countries")
 def api_countries():
     err = _require_auth()
@@ -146,6 +160,7 @@ def api_setup_credentials():
 def api_setup_clear():
     creds_store.clear()
     auth.clear_token()
+    fetch.clear_cache()
     return jsonify({"ok": True})
 
 
