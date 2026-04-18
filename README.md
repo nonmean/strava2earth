@@ -9,7 +9,9 @@ A self-hosted web app that pulls your Strava activities and displays every GPS r
 - **Interactive map** — all your GPS routes rendered on OpenStreetMap (no API key, no cost)
 - **Activity sidebar** — scrollable list sorted newest-first with search, synced to map selection
 - **Filters** — date range, country, and city dropdowns; results update immediately on change
-- **Click to focus** — click a sidebar item or a route to zoom the map and open a popup with stats
+- **Click to focus** — click a sidebar item or a route to zoom the map and open a detailed popup
+- **Rich popup stats** — distance, avg speed, pace (runs/hikes), moving time, elevation gain, and heart rate
+- **Elevation profile** — Chart.js panel in the top-right corner shows elevation vs. distance for the selected activity
 - **Encrypted credentials** — Strava API keys stored with Fernet AES encryption, never readable as plain text
 - **Local cache** — GPS streams cached to `cache/streams/` so Strava's rate limits are respected; sync resumes where it left off
 - **Background sync** — live progress bar while activities download; safe to interrupt and restart
@@ -20,6 +22,7 @@ A self-hosted web app that pulls your Strava activities and displays every GPS r
 |---|---|
 | Backend | Python · Flask |
 | Map | Leaflet.js · OpenStreetMap tiles |
+| Charts | Chart.js |
 | Geocoding | Nominatim (OSM) — free, no key needed |
 | Encryption | `cryptography` (Fernet / AES-128-CBC + HMAC-SHA256) |
 | Auth | Strava OAuth 2.0 |
@@ -73,8 +76,7 @@ strava2earth/
 │   ├── token.json
 │   ├── activities.json
 │   └── streams/      # One JSON file per activity
-├── requirements.txt
-└── .env.example
+└── requirements.txt
 ```
 
 ## Cache and privacy
@@ -82,6 +84,8 @@ strava2earth/
 Everything stays local. No data is sent anywhere except to Strava's API and OpenStreetMap tile servers (for the map background). The `cache/` directory is gitignored.
 
 The encryption key (`cache/.key`) and encrypted credentials (`cache/credentials.enc`) are generated locally on first setup. Without the key file, the credentials file cannot be decrypted.
+
+Clicking **Delete credential** wipes credentials, the OAuth token, and all cached activity data (`activities.json` and `streams/`). A fresh sync is required after reconnecting.
 
 ## Rate limits
 
