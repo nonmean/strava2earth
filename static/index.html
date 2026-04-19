@@ -455,6 +455,63 @@
     }
     .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
     .legend-swatch { width: 20px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ── Map layer selector ── */
+    #map-layer-control {
+      position: absolute;
+      bottom: 30px;
+      left: 10px;
+      z-index: 500;
+      background: rgba(22, 33, 62, 0.92);
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    #map-layer-control select {
+      background: transparent;
+      border: none;
+      color: #e0e0e0;
+      font-size: 0.75rem;
+      cursor: pointer;
+      outline: none;
+    }
+    #map-layer-control select option { background: #16213e; color: #e0e0e0; }
+
+    /* ── Draggable stats panel ── */
+    #stats-panel {
+      position: absolute;
+      top: 60px;
+      right: 10px;
+      width: 230px;
+      background: rgba(18, 25, 42, 0.97);
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      z-index: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      user-select: none;
+    }
+    #stats-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 10px 5px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #aaa;
+      border-bottom: 1px solid #0f3460;
+      cursor: move;
+    }
+    #stats-panel-close {
+      background: none;
+      border: none;
+      color: #556;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    #stats-panel-close:hover { color: #aaa; }
+    #stats-panel-content { padding: 8px 12px 10px; }
   </style>
 </head>
 <body>
@@ -476,6 +533,11 @@
       <label for="input-client-secret">Client Secret</label>
       <input type="password" id="input-client-secret" placeholder="Your client secret" autocomplete="off">
       <div class="field-hint">Stored encrypted — not readable as plain text</div>
+    </div>
+    <div class="field-row">
+      <label for="input-osm-email">Contact email (optional)</label>
+      <input type="email" id="input-osm-email" placeholder="you@example.com" autocomplete="off" spellcheck="false">
+      <div class="field-hint">Sent to Nominatim as User-Agent — required by OSM usage policy for geocoding</div>
     </div>
     <div class="setup-actions">
       <button class="btn-primary" id="setup-save-btn" onclick="saveCredentials()">Save &amp; Continue</button>
@@ -499,6 +561,20 @@
     <div>
       <div class="cred-label">Strava Client ID</div>
       <div class="cred-value" id="login-client-id">—</div>
+    </div>
+  </div>
+
+  <div class="cred-card">
+    <div class="cred-icon">&#128205;</div>
+    <div style="flex:1">
+      <div class="cred-label">OSM contact email <span style="color:#445;font-weight:400">(required by Nominatim usage policy)</span></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+        <input type="email" id="login-osm-email" placeholder="you@example.com"
+               autocomplete="off" spellcheck="false"
+               style="flex:1;background:#0f1e38;border:1px solid #0f3460;border-radius:5px;color:#e0e0e0;padding:5px 8px;font-size:0.85rem;font-family:monospace;outline:none">
+        <button class="btn-outline" id="osm-save-btn" onclick="saveOsmEmail()" style="padding:5px 10px;font-size:0.8rem;white-space:nowrap">Save</button>
+      </div>
+      <div id="osm-save-msg" style="font-size:0.75rem;margin-top:4px;display:none"></div>
     </div>
   </div>
 
@@ -559,6 +635,23 @@
   <div id="map"></div>
   <div id="legend" style="display:none"></div>
 
+  <div id="map-layer-control">
+    <select id="map-layer-select" onchange="changeMapLayer(this.value)" title="Background map">
+      <option value="osm">OpenStreetMap</option>
+      <option value="topo">Topographic (isoheight)</option>
+      <option value="dark">Dark (CartoDB)</option>
+      <option value="satellite">Satellite (Esri)</option>
+    </select>
+  </div>
+
+  <div id="stats-panel" style="display:none">
+    <div id="stats-panel-header">
+      <span>Activity</span>
+      <button id="stats-panel-close" onclick="defocusActivity()" title="Close">✕</button>
+    </div>
+    <div id="stats-panel-content"></div>
+  </div>
+
   <div id="elevation-panel" style="display:none">
     <div id="elevation-header">
       <span>Elevation Profile</span>
@@ -588,6 +681,7 @@ let activeId = null;      // currently selected activity id
 let allFeatures = [];     // full unfiltered feature list (for sidebar search)
 let sidebarCollapsed = false;
 let elevationChart = null;
+let currentTileLayer = null;
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 async function init() {
@@ -601,7 +695,7 @@ async function init() {
   }
 
   if (!status.authenticated) {
-    showLoginPage(status.client_id);
+    showLoginPage(status.client_id, status.osm_user_agent);
     return;
   }
 
@@ -614,9 +708,34 @@ function show(pageId) {
   });
 }
 
-function showLoginPage(clientId) {
+function showLoginPage(clientId, osmEmail) {
   document.getElementById('login-client-id').textContent = clientId || '—';
+  document.getElementById('login-osm-email').value = osmEmail || '';
   show('login-page');
+}
+
+async function saveOsmEmail() {
+  const email = document.getElementById('login-osm-email').value.trim();
+  const btn = document.getElementById('osm-save-btn');
+  const msg = document.getElementById('osm-save-msg');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  msg.style.display = 'none';
+  const result = await apiFetch('/api/setup/osm-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ osm_user_agent: email }),
+  });
+  btn.disabled = false;
+  btn.textContent = 'Save';
+  msg.style.display = 'block';
+  if (result) {
+    msg.textContent = 'Saved.';
+    msg.style.color = '#2ecc71';
+  } else {
+    msg.textContent = 'Failed to save.';
+    msg.style.color = '#e74c3c';
+  }
 }
 
 function showApp(status) {
@@ -653,6 +772,7 @@ function showApp(status) {
 async function saveCredentials() {
   const clientId = document.getElementById('input-client-id').value.trim();
   const clientSecret = document.getElementById('input-client-secret').value.trim();
+  const osmEmail = document.getElementById('input-osm-email').value.trim();
   const btn = document.getElementById('setup-save-btn');
 
   document.getElementById('setup-error').style.display = 'none';
@@ -668,14 +788,14 @@ async function saveCredentials() {
   const result = await apiFetch('/api/setup/credentials', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, osm_user_agent: osmEmail }),
   });
 
   btn.disabled = false;
   btn.textContent = 'Save & Continue';
 
   if (!result) { showSetupError('Failed to save credentials. Check the server log.'); return; }
-  showLoginPage(clientId);
+  showLoginPage(clientId, osmEmail);
 }
 
 function showSetupError(msg) {
@@ -695,6 +815,7 @@ async function useNewCredential() {
   await apiFetch('/api/setup/clear', { method: 'POST' });
   document.getElementById('input-client-id').value = '';
   document.getElementById('input-client-secret').value = '';
+  document.getElementById('input-osm-email').value = '';
   document.getElementById('setup-error').style.display = 'none';
   show('setup-page');
   document.getElementById('input-client-id').focus();
@@ -705,18 +826,70 @@ async function deleteCredential() {
   await apiFetch('/api/setup/clear', { method: 'POST' });
   document.getElementById('input-client-id').value = '';
   document.getElementById('input-client-secret').value = '';
+  document.getElementById('input-osm-email').value = '';
   document.getElementById('setup-error').style.display = 'none';
   show('setup-page');
   document.getElementById('input-client-id').focus();
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────────
+const TILE_LAYERS = {
+  osm: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    options: { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 },
+  },
+  topo: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    options: { attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a> | © <a href="https://www.openstreetmap.org/copyright">OSM</a>', maxZoom: 17 },
+  },
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    options: { attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>', maxZoom: 19 },
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    options: { attribution: '© <a href="https://www.esri.com/">Esri</a>', maxZoom: 18 },
+  },
+};
+
 function initMap() {
   map = L.map('map', { preferCanvas: true }).setView([20, 0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-  }).addTo(map);
+  const cfg = TILE_LAYERS.osm;
+  currentTileLayer = L.tileLayer(cfg.url, cfg.options).addTo(map);
+  initStatsPanelDrag();
+}
+
+function changeMapLayer(key) {
+  if (currentTileLayer) { map.removeLayer(currentTileLayer); currentTileLayer = null; }
+  const cfg = TILE_LAYERS[key] || TILE_LAYERS.osm;
+  currentTileLayer = L.tileLayer(cfg.url, cfg.options).addTo(map);
+  if (routeLayer) routeLayer.bringToFront();
+}
+
+function initStatsPanelDrag() {
+  const panel = document.getElementById('stats-panel');
+  const header = document.getElementById('stats-panel-header');
+  let dragging = false, ox = 0, oy = 0;
+
+  header.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    dragging = true;
+    const rect = panel.getBoundingClientRect();
+    const wrapRect = panel.parentElement.getBoundingClientRect();
+    ox = e.clientX - (rect.left - wrapRect.left);
+    oy = e.clientY - (rect.top - wrapRect.top);
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const wrapRect = panel.parentElement.getBoundingClientRect();
+    const x = e.clientX - wrapRect.left - ox;
+    const y = e.clientY - wrapRect.top - oy;
+    panel.style.right = 'auto';
+    panel.style.left = Math.max(0, x) + 'px';
+    panel.style.top  = Math.max(0, y) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
 }
 
 async function loadRoutes() {
@@ -757,14 +930,15 @@ async function loadRoutes() {
     onEachFeature: (feature, layer) => {
       const p = feature.properties;
 
-      layer.bindPopup(() => buildPopup(p));
-
-      layer.on('click', () => focusActivity(p.id, false));
+      layer.on('click', () => {
+        if (p.id === activeId) { defocusActivity(); } else { focusActivity(p.id, false); }
+      });
       layer.on('mouseover', function() {
         if (p.id !== activeId) this.setStyle({ weight: 3, opacity: 1 });
       });
       layer.on('mouseout', function() {
-        if (p.id !== activeId) this.setStyle({ weight: 2, opacity: 0.6 });
+        if (p.id !== activeId && activeId !== null) this.setStyle({ opacity: 0, weight: 0 });
+        else if (p.id !== activeId) this.setStyle({ weight: 2, opacity: 0.6 });
       });
 
       layerById[p.id] = layer;
@@ -800,7 +974,7 @@ function buildSidebar(features) {
 
     return `<div class="activity-item${p.id === activeId ? ' active' : ''}"
                  data-id="${p.id}"
-                 onclick="focusActivity(${p.id}, true)">
+                 onclick="${p.id === activeId ? 'defocusActivity()' : `focusActivity(${p.id}, true)`}">
       <div class="activity-dot" style="background:${p.color || '#888'}"></div>
       <div class="activity-info">
         <div class="activity-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
@@ -826,24 +1000,21 @@ function focusActivity(id, scrollSidebar) {
   const layer = layerById[id];
   if (!layer) return;
 
-  // Deselect previous
-  if (activeId && layerById[activeId]) {
-    layerById[activeId].setStyle({ weight: 2, opacity: 0.6 });
-  }
+  // Clear previous sidebar highlight
   const prevEl = document.querySelector('.activity-item.active');
   if (prevEl) prevEl.classList.remove('active');
 
-  // Select new
+  // Hide all routes, show only the selected one
+  Object.values(layerById).forEach(l => l.setStyle({ opacity: 0, weight: 0 }));
   activeId = id;
-  layer.setStyle({ weight: 4, opacity: 1 });
+  layer.setStyle({ color: layer.feature.properties.color || '#fc4c02', weight: 4, opacity: 1 });
   layer.bringToFront();
 
   try {
-    const bounds = layer.getBounds();
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
-    layer.openPopup(bounds.getCenter());
+    map.fitBounds(layer.getBounds(), { padding: [60, 60], maxZoom: 14 });
   } catch(e) {}
 
+  showStatsPanel(layer.feature.properties);
   loadElevationChart(id);
 
   // Highlight sidebar item
@@ -852,6 +1023,29 @@ function focusActivity(id, scrollSidebar) {
     el.classList.add('active');
     if (scrollSidebar) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
+}
+
+function defocusActivity() {
+  // Restore all routes
+  Object.values(layerById).forEach(l => {
+    const p = l.feature && l.feature.properties;
+    l.setStyle({ color: (p && p.color) || '#fc4c02', weight: 2, opacity: 0.6 });
+  });
+  activeId = null;
+  const prevEl = document.querySelector('.activity-item.active');
+  if (prevEl) prevEl.classList.remove('active');
+  document.getElementById('stats-panel').style.display = 'none';
+  closeElevationChart();
+}
+
+function showStatsPanel(p) {
+  const panel = document.getElementById('stats-panel');
+  // Reset position to default (top-right) each time a new activity is selected
+  panel.style.left = 'auto';
+  panel.style.right = '10px';
+  panel.style.top = '60px';
+  document.getElementById('stats-panel-content').innerHTML = buildPopup(p);
+  panel.style.display = 'block';
 }
 
 // ── Popup content builder ─────────────────────────────────────────────────────

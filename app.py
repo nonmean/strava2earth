@@ -144,15 +144,32 @@ def api_setup_credentials():
     body = request.get_json(silent=True) or {}
     client_id = (body.get("client_id") or "").strip()
     client_secret = (body.get("client_secret") or "").strip()
+    osm_user_agent = (body.get("osm_user_agent") or "").strip()
 
     if not client_id or not client_secret:
         return jsonify({"error": "client_id and client_secret are required"}), 400
 
     try:
-        creds_store.save(client_id, client_secret)
+        creds_store.save(client_id, client_secret, osm_user_agent)
+        auth.clear_token()
+        fetch.clear_cache()
     except OSError as e:
         return jsonify({"error": str(e)}), 500
 
+    return jsonify({"ok": True})
+
+
+@app.route("/api/setup/osm-email", methods=["POST"])
+def api_setup_osm_email():
+    body = request.get_json(silent=True) or {}
+    osm_user_agent = (body.get("osm_user_agent") or "").strip()
+    client_id, client_secret, _ = creds_store.load()
+    if not client_id or not client_secret:
+        return jsonify({"error": "No credentials found"}), 400
+    try:
+        creds_store.save(client_id, client_secret, osm_user_agent)
+    except OSError as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True})
 
 
@@ -166,7 +183,9 @@ def api_setup_clear():
 
 @app.route("/api/status")
 def api_status():
-    client_id, _ = get_strava_credentials()
+    client_id, _, osm_ua = creds_store.load()
+    if not client_id:
+        client_id, _ = get_strava_credentials()
     configured = bool(client_id)
     authenticated = auth.is_authenticated() if configured else False
     token = auth.load_token()
@@ -177,6 +196,7 @@ def api_status():
     return jsonify({
         "configured": configured,
         "client_id": client_id or "",   # safe to expose — it's a public app identifier
+        "osm_user_agent": osm_ua or "",
         "authenticated": authenticated,
         "athlete_name": athlete_name,
         "sync": fetch.sync_status(),

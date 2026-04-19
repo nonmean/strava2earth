@@ -22,8 +22,11 @@ def get_auth_url():
 def load_token():
     if not TOKEN_FILE.exists():
         return None
-    with open(TOKEN_FILE) as f:
-        return json.load(f)
+    try:
+        with open(TOKEN_FILE) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def save_token(token_data):

@@ -36,25 +36,29 @@ def is_configured() -> bool:
     return _CREDS_FILE.exists() and _KEY_FILE.exists()
 
 
-def save(client_id: str, client_secret: str) -> None:
-    """Encrypt and persist Strava credentials."""
+def save(client_id: str, client_secret: str, osm_user_agent: str = "") -> None:
+    """Encrypt and persist Strava credentials and OSM contact string."""
     key = _get_or_create_key()
     fernet = Fernet(key)
-    plaintext = json.dumps({"client_id": client_id.strip(), "client_secret": client_secret.strip()}).encode()
+    plaintext = json.dumps({
+        "client_id": client_id.strip(),
+        "client_secret": client_secret.strip(),
+        "osm_user_agent": osm_user_agent.strip(),
+    }).encode()
     _secure_write(_CREDS_FILE, fernet.encrypt(plaintext))
 
 
 def load() -> tuple:
-    """Return (client_id, client_secret) or (None, None) if unavailable/corrupt."""
+    """Return (client_id, client_secret, osm_user_agent) or (None, None, None) if unavailable/corrupt."""
     if not is_configured():
-        return None, None
+        return None, None, None
     try:
         fernet = Fernet(_KEY_FILE.read_bytes())
         plaintext = fernet.decrypt(_CREDS_FILE.read_bytes())
         data = json.loads(plaintext)
-        return data["client_id"], data["client_secret"]
+        return data["client_id"], data["client_secret"], data.get("osm_user_agent", "")
     except (InvalidToken, KeyError, json.JSONDecodeError, OSError):
-        return None, None
+        return None, None, None
 
 
 def clear() -> None:

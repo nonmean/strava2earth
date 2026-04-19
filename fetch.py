@@ -11,7 +11,7 @@ import time
 import requests
 from config import (
     CACHE_DIR, STREAMS_DIR, ACTIVITIES_FILE, ACTIVITIES_TTL_SECONDS,
-    STRAVA_API_BASE
+    STRAVA_API_BASE, get_osm_user_agent
 )
 import auth
 
@@ -148,7 +148,7 @@ def _reverse_geocode(lat, lng):
         resp = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
             params={"lat": lat, "lon": lng, "format": "json"},
-            headers={"User-Agent": "strava2earth/1.0 (bruce.xiao@gmail.com)"},
+            headers={"User-Agent": get_osm_user_agent()},
             timeout=10,
         )
         if resp.status_code == 200:

@@ -34,6 +34,17 @@ SPORT_COLORS = {
 DEFAULT_COLOR = "#7f8c8d"
 
 
+def _load_dotenv():
+    env_path = BASE_DIR / ".env"
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
+
 def get_strava_credentials():
     """
     Return (client_id, client_secret).
@@ -45,20 +56,27 @@ def get_strava_credentials():
     """
     import credentials as creds_store  # imported here to avoid circular init
 
-    client_id, client_secret = creds_store.load()
+    client_id, client_secret, _ = creds_store.load()
     if client_id and client_secret:
         return client_id, client_secret
 
-    # Fallback: .env or environment variables
-    env_path = BASE_DIR / ".env"
-    if env_path.exists():
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    os.environ.setdefault(k.strip(), v.strip().strip("'\""))
-
+    _load_dotenv()
     cid = os.environ.get("STRAVA_CLIENT_ID", "")
     csecret = os.environ.get("STRAVA_CLIENT_SECRET", "")
     return (cid or None, csecret or None)
+
+
+def get_osm_user_agent() -> str:
+    """Return the OSM/Nominatim contact string stored in encrypted credentials."""
+    import credentials as creds_store
+
+    _, _, osm_ua = creds_store.load()
+    if osm_ua:
+        return f"strava2earth/1.0 ({osm_ua})"
+
+    _load_dotenv()
+    env_ua = os.environ.get("OSM_USER_AGENT", "")
+    if env_ua:
+        return env_ua
+
+    return "strava2earth/1.0 (self-hosted)"
