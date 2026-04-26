@@ -7,6 +7,7 @@ Cache layout:
 """
 import json
 import os
+import threading
 import time
 import requests
 from config import (
@@ -15,7 +16,8 @@ from config import (
 )
 import auth
 
-_sync_state = {"running": False, "total": 0, "done": 0, "errors": 0}
+_sync_lock = threading.Lock()
+_sync_state = {"running": False, "total": 0, "done": 0, "errors": 0, "last_error": ""}
 
 
 def _headers():
@@ -119,9 +121,12 @@ def _stream_cached(activity_id):
     p = _stream_path(activity_id)
     if not p.exists():
         return False
-    with open(p) as f:
-        data = json.load(f)
-    return bool(data.get("latlng"))
+    try:
+        with open(p) as f:
+            data = json.load(f)
+        return bool(data.get("latlng"))
+    except (json.JSONDecodeError, OSError):
+        return False
 
 
 def _fetch_stream(activity_id):
@@ -242,35 +247,112 @@ def fetch_stream_for_activity(activity):
 
 # ── Sync orchestration ───────────────────────────────────────────────────────
 
-def sync(force=False):
+def try_start_sync():
+    """Atomically mark sync as running. Returns True if started, False if already running."""
+    with _sync_lock:
+        if _sync_state["running"]:
+            return False
+        _sync_state["running"] = True
+        _sync_state["errors"] = 0
+        _sync_state["last_error"] = ""
+        return True
+
+
+def sync(force_streams=False):
     """
     Main sync function — call in a background thread.
-    Fetches activity list then downloads missing GPS streams.
+    Always re-fetches the activity list from Strava to catch new activities.
+    If force_streams=True, re-downloads all GPS streams (wipes existing cache).
     """
-    global _sync_state
-    _sync_state["running"] = True
-    _sync_state["errors"] = 0
+    global _route_data_mtime
 
     try:
-        activities = load_activities(force=force)
+        activities = load_activities(force=True)
         gps_activities = [a for a in activities if a.get("start_latlng")]
         _sync_state["total"] = len(gps_activities)
-        _sync_state["done"] = sum(1 for a in gps_activities if _stream_cached(a["id"]))
+        _sync_state["done"] = 0 if force_streams else sum(
+            1 for a in gps_activities if _stream_cached(a["id"])
+        )
+
+        if force_streams:
+            # Invalidate in-memory cache before wiping files
+            _route_data_mtime = 0.0
 
         for activity in gps_activities:
-            if _stream_cached(activity["id"]):
+            if force_streams:
+                p = _stream_path(activity["id"])
+                if p.exists():
+                    p.unlink()
+            elif _stream_cached(activity["id"]):
                 continue
             try:
                 fetch_stream_for_activity(activity)
                 _sync_state["done"] += 1
+            except requests.RequestException as e:
+                _sync_state["errors"] += 1
+                _sync_state["last_error"] = str(e)
+                print(f"Network error fetching stream for {activity['id']}: {e}")
+                if getattr(e.response, "status_code", None) == 429:
+                    print("Rate limit hit — aborting sync early.")
+                    _sync_state["last_error"] = "Strava rate limit exceeded. Try again later."
+                    return
             except Exception as e:
                 _sync_state["errors"] += 1
+                _sync_state["last_error"] = str(e)
                 print(f"Error fetching stream for {activity['id']}: {e}")
             time.sleep(0.5)  # stay under 100 req/15min burst limit
 
         _backfill_cities_nominatim()
     finally:
         _sync_state["running"] = False
+
+
+def update_activity_name(activity_id, new_name):
+    """Push a renamed activity to Strava and update local cache. Returns the saved name."""
+    resp = requests.put(
+        f"{STRAVA_API_BASE}/activities/{activity_id}",
+        headers=_headers(),
+        json={"name": new_name},
+        timeout=15,
+    )
+    if resp.status_code == 403:
+        raise PermissionError(
+            "Missing activity:write permission — please logout and reconnect to Strava"
+        )
+    resp.raise_for_status()
+    actual_name = resp.json().get("name", new_name)
+
+    # Update stream cache file
+    path = _stream_path(activity_id)
+    if path.exists():
+        try:
+            with open(path) as f:
+                stream = json.load(f)
+            stream["name"] = actual_name
+            with open(path, "w") as f:
+                json.dump(stream, f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Update activities.json
+    if ACTIVITIES_FILE.exists():
+        try:
+            with open(ACTIVITIES_FILE) as f:
+                activities = json.load(f)
+            for a in activities:
+                if a["id"] == activity_id:
+                    a["name"] = actual_name
+                    break
+            with open(ACTIVITIES_FILE, "w") as f:
+                json.dump(activities, f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Invalidate in-memory route cache
+    global _route_data_mtime
+    _route_data_mtime = 0.0
+
+    return actual_name
 
 
 def _backfill_cities_nominatim():
@@ -316,7 +398,8 @@ def _backfill_cities_nominatim():
 
 
 def sync_status():
-    return dict(_sync_state)
+    with _sync_lock:
+        return dict(_sync_state)
 
 
 # ── In-memory route cache ────────────────────────────────────────────────────

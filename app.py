@@ -56,13 +56,14 @@ def api_sync():
         return err
 
     global _sync_thread
-    force = request.args.get("force", "0") == "1"
+    force_streams = request.args.get("force", "0") == "1"
 
-    status = fetch.sync_status()
-    if status["running"]:
-        return jsonify({"status": "in_progress", **status})
+    if not fetch.try_start_sync():
+        return jsonify({"status": "in_progress", **fetch.sync_status()})
 
-    _sync_thread = threading.Thread(target=fetch.sync, kwargs={"force": force}, daemon=True)
+    _sync_thread = threading.Thread(
+        target=fetch.sync, kwargs={"force_streams": force_streams}, daemon=True
+    )
     _sync_thread.start()
     return jsonify({"status": "started"})
 
@@ -187,7 +188,12 @@ def api_status():
     if not client_id:
         client_id, _ = get_strava_credentials()
     configured = bool(client_id)
-    authenticated = auth.is_authenticated() if configured else False
+    authenticated = False
+    if configured:
+        try:
+            authenticated = auth.get_valid_token() is not None
+        except Exception:
+            authenticated = False
     token = auth.load_token()
     athlete_name = ""
     if token and "athlete" in token:
@@ -201,6 +207,24 @@ def api_status():
         "athlete_name": athlete_name,
         "sync": fetch.sync_status(),
     })
+
+
+@app.route("/api/activity/<int:activity_id>", methods=["PUT"])
+def api_update_activity(activity_id):
+    err = _require_auth()
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    new_name = (body.get("name") or "").strip()
+    if not new_name:
+        return jsonify({"error": "name is required"}), 400
+    try:
+        actual_name = fetch.update_activity_name(activity_id, new_name)
+        return jsonify({"name": actual_name})
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except (RuntimeError, OSError) as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Static files ─────────────────────────────────────────────────────────────
