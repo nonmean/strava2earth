@@ -12,21 +12,23 @@ A self-hosted web app that pulls your Strava activities and displays every GPS r
 - **Filters** — date range, country, and city dropdowns; results update immediately on change
 - **Click to focus** — click a sidebar item or a route to zoom the map and isolate that single activity; all other routes are hidden so the selected one stands out; click again to show all
 - **Draggable stats panel** — activity details (distance, avg speed, pace, moving time, elevation gain, heart rate) float in a panel you can drag anywhere on the map
-- **Elevation profile** — Chart.js panel shows elevation vs. distance for the selected activity
+- **Rename activities** — click ✏ in the stats panel to edit an activity name and push the change back to Strava with one click
+- **Elevation profile** — Chart.js panel shows elevation vs. distance for the selected activity; drag it anywhere on the map
+- **Sync New / Sync All** — _Sync New_ fetches the latest activity list and downloads only missing GPS streams; _Sync All_ forces a full re-download of every stream from Strava
 - **Encrypted credentials** — Strava API keys stored with Fernet AES encryption, never readable as plain text
 - **Local cache** — GPS streams cached to `cache/streams/` so Strava's rate limits are respected; sync resumes where it left off
 - **Background sync** — live progress bar while activities download; safe to interrupt and restart
 
 ## Tech stack
 
-| Layer | Tool |
-|---|---|
-| Backend | Python · Flask |
-| Map | Leaflet.js · OpenStreetMap / OpenTopoMap / CartoDB / Esri tiles |
-| Charts | Chart.js |
-| Geocoding | Nominatim (OSM) — free, no key needed |
-| Encryption | `cryptography` (Fernet / AES-128-CBC + HMAC-SHA256) |
-| Auth | Strava OAuth 2.0 |
+| Layer      | Tool                                                            |
+| ---------- | --------------------------------------------------------------- |
+| Backend    | Python · Flask                                                  |
+| Map        | Leaflet.js · OpenStreetMap / OpenTopoMap / CartoDB / Esri tiles |
+| Charts     | Chart.js                                                        |
+| Geocoding  | Nominatim (OSM) — free, no key needed                           |
+| Encryption | `cryptography` (Fernet / AES-128-CBC + HMAC-SHA256)             |
+| Auth       | Strava OAuth 2.0                                                |
 
 ## Setup
 
@@ -40,7 +42,7 @@ A self-hosted web app that pulls your Strava activities and displays every GPS r
 ### 2. Install dependencies
 
 ```bash
-pip install flask requests cryptography
+pip install -r requirements.txt
 ```
 
 ### 3. Run
@@ -54,8 +56,8 @@ Open [http://localhost:5001](http://localhost:5001).
 ### 4. First-time flow
 
 1. **Setup** — enter your Strava Client ID, Secret, and an optional contact email for Nominatim (all stored encrypted on disk)
-2. **Connect** — click *Connect with Strava* to authorize via OAuth; you can also set or update the contact email from this page
-3. **Sync** — click *Sync Strava* to download your activity list and GPS streams
+2. **Connect** — click _Connect with Strava_ to authorize via OAuth; you can also set or update the contact email from this page
+3. **Sync** — click _Sync New_ to fetch your activity list and download GPS streams; use _Sync All_ to force a full re-download
 4. **Explore** — use the date / country / city filters and the sidebar to navigate your routes
 
 Sync runs in the background. You can start browsing cached activities immediately while the rest download.

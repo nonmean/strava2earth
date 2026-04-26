@@ -1,6 +1,7 @@
 import json
 import time
 import requests
+from urllib.parse import urlencode
 from config import (
     TOKEN_FILE, STRAVA_TOKEN_URL, STRAVA_AUTH_URL,
     REDIRECT_URI, get_strava_credentials
@@ -9,13 +10,13 @@ from config import (
 
 def get_auth_url():
     client_id, _ = get_strava_credentials()
-    params = (
-        f"client_id={client_id}"
-        f"&redirect_uri={REDIRECT_URI}"
-        f"&response_type=code"
-        f"&approval_prompt=auto"
-        f"&scope=activity:read_all"
-    )
+    params = urlencode({
+        "client_id": client_id,
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        "approval_prompt": "auto",
+        "scope": "activity:read_all,activity:write",
+    })
     return f"{STRAVA_AUTH_URL}?{params}"
 
 
@@ -33,6 +34,7 @@ def save_token(token_data):
     TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(TOKEN_FILE, "w") as f:
         json.dump(token_data, f, indent=2)
+    TOKEN_FILE.chmod(0o600)
 
 
 def clear_token():
