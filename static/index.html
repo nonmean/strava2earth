@@ -719,6 +719,181 @@
         outline: none;
         border-color: #fc4c02;
       }
+
+      /* ── Chat panel ── */
+      #chat-panel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 300px;
+        background: #131b2e;
+        border-left: 1px solid #0f3460;
+        display: flex;
+        flex-direction: column;
+        z-index: 400;
+        transition: transform 0.25s ease;
+      }
+
+      #chat-panel.hidden {
+        transform: translateX(300px);
+      }
+
+      #chat-panel-header {
+        padding: 8px 10px;
+        border-bottom: 1px solid #0f3460;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #aaa;
+      }
+
+      #chat-panel-header span {
+        flex: 1;
+      }
+
+      #chat-model-select {
+        background: #0f3460;
+        border: 1px solid #1a4a8a;
+        color: #e0e0e0;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+
+      #chat-panel-close {
+        background: none;
+        border: none;
+        color: #556;
+        cursor: pointer;
+        font-size: 0.9rem;
+        padding: 0 2px;
+        line-height: 1;
+      }
+      #chat-panel-close:hover {
+        color: #aaa;
+      }
+
+      #chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      #chat-messages::-webkit-scrollbar {
+        width: 4px;
+      }
+      #chat-messages::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #chat-messages::-webkit-scrollbar-thumb {
+        background: #1a4a8a;
+        border-radius: 2px;
+      }
+
+      .chat-msg {
+        max-width: 90%;
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .chat-msg-user {
+        background: #0f3460;
+        color: #e0e0e0;
+        align-self: flex-end;
+        border-bottom-right-radius: 2px;
+      }
+
+      .chat-msg-assistant {
+        background: #1a2a46;
+        color: #ddd;
+        align-self: flex-start;
+        border-bottom-left-radius: 2px;
+      }
+
+      .chat-msg-thinking {
+        color: #556;
+        font-style: italic;
+        font-size: 0.75rem;
+        align-self: flex-start;
+      }
+
+      #chat-input-row {
+        display: flex;
+        gap: 6px;
+        padding: 8px 10px;
+        border-top: 1px solid #0f3460;
+        flex-shrink: 0;
+      }
+
+      #chat-input {
+        flex: 1;
+        background: #0d1626;
+        border: 1px solid #1a4a8a;
+        color: #e0e0e0;
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-size: 0.82rem;
+        outline: none;
+      }
+      #chat-input:focus {
+        border-color: #fc4c02;
+      }
+
+      #chat-send-btn {
+        background: #fc4c02;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+      #chat-send-btn:hover {
+        background: #e04000;
+      }
+      #chat-send-btn:disabled {
+        background: #8a3000;
+        cursor: default;
+      }
+
+      /* ── Chat toggle button ── */
+      #chat-toggle {
+        position: absolute;
+        top: 50%;
+        right: 300px;
+        transform: translateY(-50%);
+        z-index: 401;
+        background: #16213e;
+        border: 1px solid #0f3460;
+        border-right: none;
+        color: #888;
+        padding: 8px 4px;
+        cursor: pointer;
+        border-radius: 4px 0 0 4px;
+        font-size: 0.85rem;
+        line-height: 1;
+        transition: right 0.25s ease;
+        display: none;
+      }
+      #chat-toggle:hover {
+        background: #1a4a8a;
+        color: #fff;
+      }
+      #chat-panel.hidden ~ #chat-toggle {
+        right: 0;
+      }
     </style>
   </head>
   <body>
@@ -768,6 +943,21 @@
           <div class="field-hint">
             Sent to Nominatim as User-Agent — required by OSM usage policy for
             geocoding
+          </div>
+        </div>
+        <div class="field-row">
+          <label for="input-deepseek-key">DeepSeek API Key (optional)</label>
+          <input
+            type="password"
+            id="input-deepseek-key"
+            placeholder="sk-..."
+            autocomplete="off"
+          />
+          <div class="field-hint">
+            Enables the AI coach chat panel — stored encrypted locally.
+            <strong style="color:#e0a040">Privacy:</strong>
+            when enabled, your activity history (names, distances, heart rate,
+            speed, training load) is sent to DeepSeek's API on each session.
           </div>
         </div>
         <div class="setup-actions">
@@ -951,6 +1141,29 @@
       </button>
 
       <div id="map"></div>
+
+      <div id="chat-panel" class="hidden">
+        <div id="chat-panel-header">
+          <span>&#x1F3CB; Coach</span>
+          <select id="chat-model-select" onchange="saveChatModel(this.value)" title="DeepSeek model">
+            <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+            <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+          </select>
+          <button id="chat-panel-close" onclick="toggleChatPanel()" title="Close">✕</button>
+        </div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-row">
+          <input
+            id="chat-input"
+            type="text"
+            placeholder="Ask your coach…"
+            onkeydown="if(event.key==='Enter') sendChatMessage()"
+          />
+          <button id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+        </div>
+      </div>
+      <button id="chat-toggle" onclick="toggleChatPanel()" title="Toggle coach">&#x1F4AC;</button>
+
       <div id="legend" style="display: none"></div>
 
       <div id="map-layer-control">
@@ -1098,6 +1311,8 @@
 
         if (!map) initMap();
 
+        initChat(status);
+
         const today = new Date();
         const yearAgo = new Date(today);
         yearAgo.setFullYear(today.getFullYear() - 1);
@@ -1126,6 +1341,9 @@
         const osmEmail = document
           .getElementById("input-osm-email")
           .value.trim();
+        const deepseekKey = document
+          .getElementById("input-deepseek-key")
+          .value.trim();
         const btn = document.getElementById("setup-save-btn");
 
         document.getElementById("setup-error").style.display = "none";
@@ -1145,6 +1363,7 @@
             client_id: clientId,
             client_secret: clientSecret,
             osm_user_agent: osmEmail,
+            deepseek_api_key: deepseekKey,
           }),
         });
 
@@ -1475,7 +1694,7 @@
         const panel = document.getElementById("stats-panel");
         // Reset position to default (top-right) each time a new activity is selected
         panel.style.left = "auto";
-        panel.style.right = "10px";
+        panel.style.right = chatPanelOpen ? "310px" : "10px";
         panel.style.top = "10px";
         document.getElementById("stats-panel-content").innerHTML =
           buildPopup(p);
@@ -1880,7 +2099,8 @@
       }
 
       // ── Auth ──────────────────────────────────────────────────────────────────────
-      function logout() {
+      async function logout() {
+        await saveMemory();
         window.location.href = "/auth/logout";
       }
 
@@ -1915,6 +2135,365 @@
           .replace(/>/g, "&gt;")
           .replace(/"/g, "&quot;");
       }
+
+      // ── Chat ─────────────────────────────────────────────────────────────────────
+      let chatHistory = [];
+      let coachNotes = "";
+      let lastLogin = null;
+      let chatPanelOpen = false;
+      let chatAppStatus = null;
+      let activityContext = "";
+
+      async function initChat(status) {
+        chatAppStatus = status;
+        if (!status.has_deepseek_key) return;
+
+        document.getElementById("chat-toggle").style.display = "block";
+
+        let mem = (await apiFetch("/api/memory")) || {};
+        mem = await maybeCompressMemory(mem);
+        chatHistory = mem.conversation_history || [];
+        coachNotes = mem.coach_notes || "";
+        lastLogin = mem.last_login || null;
+
+        const savedModel = mem.deepseek_model || "deepseek-v4-flash";
+        document.getElementById("chat-model-select").value = savedModel;
+
+        // Load ALL activities (with HR zones, speed, suffer score) for persistent context
+        const activities = (await apiFetch("/api/activity-stats")) || [];
+        activityContext = buildActivityContext(activities);
+
+        const newSinceLogin = lastLogin
+          ? activities.filter((a) => (a.start_date || "") >= lastLogin)
+          : activities.slice(0, 10);
+
+        renderChatMessages();
+
+        if (newSinceLogin.length > 0) {
+          const summary = formatActivitiesForPrompt(newSinceLogin);
+          const contextMsg = `New activities since last session:\n${summary}\n\nPlease give a brief training analysis and suggestions.`;
+
+          const thinkingEl = addThinkingIndicator();
+          const model =
+            document.getElementById("chat-model-select")?.value ||
+            "deepseek-v4-flash";
+          const result = await apiFetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: "system", content: buildCoachSystemPrompt() },
+                ...chatHistory,
+                { role: "user", content: contextMsg },
+              ],
+            }),
+          });
+          thinkingEl.remove();
+          if (result?.content) appendChatMessage("assistant", result.content);
+        } else if (chatHistory.length === 0 && activities.length > 0) {
+          // First-ever session with no new activities — give a welcome analysis
+          const thinkingEl = addThinkingIndicator();
+          const model =
+            document.getElementById("chat-model-select")?.value ||
+            "deepseek-v4-flash";
+          const result = await apiFetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: "system", content: buildCoachSystemPrompt() },
+                { role: "user", content: "Please introduce yourself and give me an overview of my training history and fitness status." },
+              ],
+            }),
+          });
+          thinkingEl.remove();
+          if (result?.content) appendChatMessage("assistant", result.content);
+        }
+
+        toggleChatPanel(true);
+      }
+
+      async function maybeCompressMemory(mem) {
+        if (!mem.last_login) return mem;
+        const ageMs = Date.now() - new Date(mem.last_login).getTime();
+        const thirtyDays = 30 * 24 * 3600 * 1000;
+        if (ageMs < thirtyDays || !mem.conversation_history?.length) return mem;
+
+        const compressPrompt =
+          `Summarize this conversation history into a compact coach_notes paragraph (max 300 words) capturing key facts about the athlete's fitness, goals, recurring patterns, and any important coaching notes. Discard routine exchanges.\n\n${JSON.stringify(mem.conversation_history)}`;
+        const model =
+          document.getElementById("chat-model-select")?.value || "deepseek-v4-flash";
+        const summary = await callChatRaw(
+          buildCoachSystemPrompt(),
+          [{ role: "user", content: compressPrompt }],
+          model,
+        );
+        const compressed = {
+          ...mem,
+          coach_notes: summary || mem.coach_notes,
+          conversation_history: [],
+        };
+        await saveMemory(compressed);
+        return compressed;
+      }
+
+      function buildCoachSystemPrompt() {
+        let prompt =
+          "You are an experienced endurance sports coach specializing in training data analysis. " +
+          "You review athletes' Strava activities and provide evidence-based feedback on training load, " +
+          "recovery, pace trends, and progression. Reference specific workouts and metrics. Be concise, practical, and encouraging.";
+        if (activityContext) prompt += `\n\n${activityContext}`;
+        if (coachNotes) prompt += `\n\nLong-term coaching notes:\n${coachNotes}`;
+        return prompt;
+      }
+
+      function buildActivityContext(activities) {
+        if (!activities.length) return "";
+
+        // Sort newest-first
+        const sorted = [...activities].sort((a, b) =>
+          (b.start_date || "").localeCompare(a.start_date || ""),
+        );
+
+        // Sport totals
+        const sportTotals = {};
+        let totalKm = 0;
+        for (const a of sorted) {
+          const s = a.sport_type || "Other";
+          if (!sportTotals[s]) sportTotals[s] = { count: 0, km: 0 };
+          sportTotals[s].count++;
+          const km =
+            a.distance_km != null ? a.distance_km : (a.distance || 0) / 1000;
+          sportTotals[s].km += km;
+          totalKm += km;
+        }
+        const sportSummary = Object.entries(sportTotals)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([s, v]) => `${s}: ${v.count} activities, ${Math.round(v.km)} km`)
+          .join("; ");
+
+        // Monthly aggregates (last 12 months)
+        const monthMap = {};
+        const cutoff = new Date();
+        cutoff.setFullYear(cutoff.getFullYear() - 1);
+        for (const a of sorted) {
+          if (!a.start_date) continue;
+          const d = new Date(a.start_date);
+          if (d < cutoff) continue;
+          const key = a.start_date.slice(0, 7); // YYYY-MM
+          if (!monthMap[key]) monthMap[key] = {};
+          const s = a.sport_type || "Other";
+          if (!monthMap[key][s]) monthMap[key][s] = { count: 0, km: 0, load: 0 };
+          const km =
+            a.distance_km != null ? a.distance_km : (a.distance || 0) / 1000;
+          monthMap[key][s].count++;
+          monthMap[key][s].km += km;
+          monthMap[key][s].load += a.suffer_score || 0;
+        }
+        const monthLines = Object.entries(monthMap)
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([month, sports]) => {
+            const parts = Object.entries(sports)
+              .map(([s, v]) => {
+                let str = `${s} ${Math.round(v.km)}km×${v.count}`;
+                if (v.load) str += ` load:${v.load}`;
+                return str;
+              })
+              .join(", ");
+            return `  ${month}: ${parts}`;
+          })
+          .join("\n");
+
+        // Recent individual activities (last 30)
+        const recentLines = sorted
+          .slice(0, 30)
+          .map((a) => formatActivitiesForPrompt([a]))
+          .join("\n");
+
+        return (
+          `Athlete's complete Strava history (${activities.length} total activities, ${Math.round(totalKm)} km total):\n` +
+          `Sports breakdown: ${sportSummary}\n\n` +
+          `Monthly training load (last 12 months):\n${monthLines || "  (none)"}\n\n` +
+          `Recent activities (last 30):\n${recentLines}`
+        );
+      }
+
+      function formatActivitiesForPrompt(activities) {
+        return activities
+          .slice(0, 20)
+          .map((a) => {
+            // Support both /api/activities (distance in metres) and /api/activity-stats (distance_km)
+            const distKm =
+              a.distance_km != null
+                ? a.distance_km
+                : a.distance != null
+                  ? a.distance / 1000
+                  : null;
+            const dist = distKm != null ? `${distKm.toFixed(1)} km` : "";
+            const dur = a.elapsed_time ? formatDuration(a.elapsed_time) : "";
+            const elev = a.total_elevation_gain
+              ? `+${Math.round(a.total_elevation_gain)}m`
+              : "";
+            const hr = a.average_heartrate
+              ? `HR:${Math.round(a.average_heartrate)}bpm`
+              : "";
+            const speed =
+              a.average_speed_kmh != null
+                ? `${a.average_speed_kmh.toFixed(1)}km/h`
+                : "";
+            const load = a.suffer_score != null ? `load:${a.suffer_score}` : "";
+            const watts =
+              a.weighted_average_watts != null
+                ? `${Math.round(a.weighted_average_watts)}W`
+                : a.average_watts != null
+                  ? `${Math.round(a.average_watts)}W`
+                  : "";
+            const zones = a.hr_zones
+              ? `zones:Z1=${a.hr_zones.z1}%,Z2=${a.hr_zones.z2}%,Z3=${a.hr_zones.z3}%,Z4=${a.hr_zones.z4}%,Z5=${a.hr_zones.z5}%`
+              : "";
+            const pr = a.pr_count ? `PR×${a.pr_count}` : "";
+            const date = (a.start_date || "").slice(0, 10);
+            return [
+              date,
+              a.sport_type,
+              `"${a.name}"`,
+              dist,
+              dur,
+              elev,
+              speed,
+              hr,
+              zones,
+              load,
+              watts,
+              pr,
+            ]
+              .filter(Boolean)
+              .join(" | ");
+          })
+          .join("\n");
+      }
+
+      function appendChatMessage(role, content, suppressRender) {
+        chatHistory.push({ role, content });
+        if (!suppressRender) renderChatMessages();
+      }
+
+      function renderChatMessages() {
+        const container = document.getElementById("chat-messages");
+        container.innerHTML = chatHistory
+          .map((m) => {
+            const cls =
+              m.role === "user" ? "chat-msg-user" : "chat-msg-assistant";
+            return `<div class="chat-msg ${cls}">${escapeHtml(m.content)}</div>`;
+          })
+          .join("");
+        container.scrollTop = container.scrollHeight;
+      }
+
+      function addThinkingIndicator() {
+        const container = document.getElementById("chat-messages");
+        const el = document.createElement("div");
+        el.className = "chat-msg chat-msg-thinking";
+        el.textContent = "Coach is thinking…";
+        container.appendChild(el);
+        container.scrollTop = container.scrollHeight;
+        return el;
+      }
+
+      async function callChat(history) {
+        const model =
+          document.getElementById("chat-model-select")?.value || "deepseek-v4-flash";
+        return callChatRaw(buildCoachSystemPrompt(), history, model);
+      }
+
+      async function callChatRaw(systemPrompt, history, model) {
+        const messages = [
+          { role: "system", content: systemPrompt },
+          ...history,
+        ];
+        const result = await apiFetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages, model }),
+        });
+        return result ? result.content : null;
+      }
+
+      async function sendChatMessage() {
+        const input = document.getElementById("chat-input");
+        const btn = document.getElementById("chat-send-btn");
+        const text = input.value.trim();
+        if (!text) return;
+
+        input.value = "";
+        input.disabled = true;
+        btn.disabled = true;
+
+        appendChatMessage("user", text);
+        const thinkingEl = addThinkingIndicator();
+
+        const reply = await callChat([...chatHistory]);
+        thinkingEl.remove();
+
+        if (reply) appendChatMessage("assistant", reply);
+
+        input.disabled = false;
+        btn.disabled = false;
+        input.focus();
+      }
+
+      function toggleChatPanel(forceOpen) {
+        const panel = document.getElementById("chat-panel");
+        const toggle = document.getElementById("chat-toggle");
+        const mapEl = document.getElementById("map");
+
+        if (forceOpen !== undefined) {
+          chatPanelOpen = forceOpen;
+        } else {
+          chatPanelOpen = !chatPanelOpen;
+        }
+
+        panel.classList.toggle("hidden", !chatPanelOpen);
+        mapEl.style.right = chatPanelOpen ? "300px" : "0";
+        toggle.style.right = chatPanelOpen ? "300px" : "0";
+
+        // Shift right-anchored overlay panels so they don't hide under the chat panel
+        const panelRight = chatPanelOpen ? "310px" : "10px";
+        ["elevation-panel", "legend", "stats-panel"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el && !el.style.left) el.style.right = panelRight;
+        });
+        const syncOverlay = document.getElementById("sync-overlay");
+        if (syncOverlay) syncOverlay.style.right = chatPanelOpen ? "320px" : "20px";
+
+        setTimeout(() => map && map.invalidateSize(), 260);
+      }
+
+      async function saveChatModel(model) {
+        const mem = (await apiFetch("/api/memory")) || {};
+        await saveMemory({ ...mem, deepseek_model: model });
+      }
+
+      async function saveMemory(overrideMem) {
+        const body = overrideMem || {
+          last_login: new Date().toISOString(),
+          conversation_history: chatHistory.slice(-40),
+          coach_notes: coachNotes,
+          deepseek_model:
+            document.getElementById("chat-model-select")?.value ||
+            "deepseek-v4-flash",
+        };
+        await fetch("/api/memory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          keepalive: true,
+        });
+      }
+
+      window.addEventListener("beforeunload", () => saveMemory());
 
       // Boot
       init();

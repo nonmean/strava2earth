@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 update_suggestions.md
 update_suggestions_codex.md
+idea/
+review/

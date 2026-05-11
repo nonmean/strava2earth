@@ -6,6 +6,7 @@ CACHE_DIR = BASE_DIR / "cache"
 STREAMS_DIR = CACHE_DIR / "streams"
 TOKEN_FILE = CACHE_DIR / "token.json"
 ACTIVITIES_FILE = CACHE_DIR / "activities.json"
+MEMORY_FILE = CACHE_DIR / "memory_context.json"
 
 ACTIVITIES_TTL_SECONDS = 3600  # re-fetch activity list after 1 hour
 
@@ -56,7 +57,7 @@ def get_strava_credentials():
     """
     import credentials as creds_store  # imported here to avoid circular init
 
-    client_id, client_secret, _ = creds_store.load()
+    client_id, client_secret, _, _ds = creds_store.load()
     if client_id and client_secret:
         return client_id, client_secret
 
@@ -70,7 +71,7 @@ def get_osm_user_agent() -> str:
     """Return the OSM/Nominatim contact string stored in encrypted credentials."""
     import credentials as creds_store
 
-    _, _, osm_ua = creds_store.load()
+    _, _, osm_ua, _ds = creds_store.load()
     if osm_ua:
         return f"strava2earth/1.0 ({osm_ua})"
 
