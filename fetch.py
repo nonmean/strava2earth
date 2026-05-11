@@ -99,6 +99,12 @@ def load_activities(force=False):
                 "max_speed": a.get("max_speed"),
                 "average_heartrate": a.get("average_heartrate"),
                 "max_heartrate": a.get("max_heartrate"),
+                "suffer_score": a.get("suffer_score"),
+                "average_watts": a.get("average_watts"),
+                "weighted_average_watts": a.get("weighted_average_watts"),
+                "kilojoules": a.get("kilojoules"),
+                "average_cadence": a.get("average_cadence"),
+                "pr_count": a.get("pr_count", 0),
                 "location_country": a.get("location_country") or "",
                 "location_city": a.get("location_city") or "",
             })
@@ -133,7 +139,7 @@ def _fetch_stream(activity_id):
     resp = requests.get(
         f"{STRAVA_API_BASE}/activities/{activity_id}/streams",
         headers=_headers(),
-        params={"keys": "latlng,altitude,distance", "key_by_type": "true"},
+        params={"keys": "latlng,altitude,distance,heartrate,velocity_smooth", "key_by_type": "true"},
         timeout=30,
     )
     if resp.status_code == 404:
@@ -144,7 +150,29 @@ def _fetch_stream(activity_id):
         "latlng": data.get("latlng", {}).get("data", []),
         "altitude": data.get("altitude", {}).get("data", []),
         "distance": data.get("distance", {}).get("data", []),
+        "heartrate": data.get("heartrate", {}).get("data", []),
+        "velocity_smooth": data.get("velocity_smooth", {}).get("data", []),
     }
+
+
+def _compute_hr_zones(heartrate_data, max_hr=None):
+    """Return percentage of time in each of 5 HR zones, or None if no data."""
+    if not heartrate_data:
+        return None
+    if not max_hr:
+        max_hr = max(heartrate_data)
+    if not max_hr:
+        return None
+    thresholds = [0.60, 0.70, 0.80, 0.90, 1.01]
+    counts = [0] * 5
+    for hr in heartrate_data:
+        pct = hr / max_hr
+        for i, t in enumerate(thresholds):
+            if pct <= t:
+                counts[i] += 1
+                break
+    total = len(heartrate_data)
+    return {f"z{i+1}": round(c / total * 100) for i, c in enumerate(counts)}
 
 
 def _reverse_geocode(lat, lng):
@@ -218,6 +246,12 @@ def fetch_stream_for_activity(activity):
             city = geo_city
         time.sleep(1.1)  # Nominatim rate limit
 
+    hr_data = stream_data.get("heartrate", [])
+    vel_data = stream_data.get("velocity_smooth", [])
+    hr_zones = _compute_hr_zones(hr_data, activity.get("max_heartrate"))
+    avg_speed_kmh = round(sum(vel_data) / len(vel_data) * 3.6, 2) if vel_data else None
+    max_speed_kmh = round(max(vel_data) * 3.6, 2) if vel_data else None
+
     stream = {
         "id": aid,
         "name": activity["name"],
@@ -231,6 +265,15 @@ def fetch_stream_for_activity(activity):
         "max_speed": activity.get("max_speed"),
         "average_heartrate": activity.get("average_heartrate"),
         "max_heartrate": activity.get("max_heartrate"),
+        "suffer_score": activity.get("suffer_score"),
+        "average_watts": activity.get("average_watts"),
+        "weighted_average_watts": activity.get("weighted_average_watts"),
+        "kilojoules": activity.get("kilojoules"),
+        "average_cadence": activity.get("average_cadence"),
+        "pr_count": activity.get("pr_count", 0),
+        "hr_zones": hr_zones,
+        "avg_speed_kmh": avg_speed_kmh,
+        "max_speed_kmh": max_speed_kmh,
         "location_country": country,
         "location_city": city,
         "latlng": latlng,
@@ -269,13 +312,17 @@ def sync(force_streams=False):
     try:
         activities = load_activities(force=True)
         gps_activities = [a for a in activities if a.get("start_latlng")]
-        _sync_state["total"] = len(gps_activities)
-        _sync_state["done"] = 0 if force_streams else sum(
+        initial_done = 0 if force_streams else sum(
             1 for a in gps_activities if _stream_cached(a["id"])
         )
+        with _sync_lock:
+            _sync_state["total"] = len(gps_activities)
+            _sync_state["done"] = initial_done
 
         if force_streams:
             # Invalidate in-memory cache before wiping files
+            global _route_data, _route_data_mtime
+            _route_data = []
             _route_data_mtime = 0.0
 
         for activity in gps_activities:
@@ -287,24 +334,29 @@ def sync(force_streams=False):
                 continue
             try:
                 fetch_stream_for_activity(activity)
-                _sync_state["done"] += 1
+                with _sync_lock:
+                    _sync_state["done"] += 1
             except requests.RequestException as e:
-                _sync_state["errors"] += 1
-                _sync_state["last_error"] = str(e)
+                with _sync_lock:
+                    _sync_state["errors"] += 1
+                    _sync_state["last_error"] = str(e)
                 print(f"Network error fetching stream for {activity['id']}: {e}")
                 if getattr(e.response, "status_code", None) == 429:
                     print("Rate limit hit — aborting sync early.")
-                    _sync_state["last_error"] = "Strava rate limit exceeded. Try again later."
+                    with _sync_lock:
+                        _sync_state["last_error"] = "Strava rate limit exceeded. Try again later."
                     return
-            except Exception as e:
-                _sync_state["errors"] += 1
-                _sync_state["last_error"] = str(e)
+            except (json.JSONDecodeError, OSError, KeyError, ValueError) as e:
+                with _sync_lock:
+                    _sync_state["errors"] += 1
+                    _sync_state["last_error"] = str(e)
                 print(f"Error fetching stream for {activity['id']}: {e}")
             time.sleep(0.5)  # stay under 100 req/15min burst limit
 
         _backfill_cities_nominatim()
     finally:
-        _sync_state["running"] = False
+        with _sync_lock:
+            _sync_state["running"] = False
 
 
 def update_activity_name(activity_id, new_name):
@@ -563,6 +615,66 @@ def get_stream(activity_id):
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         return None
+
+
+def get_activity_stats():
+    """
+    Return per-activity stats for the coach context: merges activities.json fields
+    (suffer_score, watts, cadence) with stream-computed fields (hr_zones, speed).
+    Returns a list of lightweight dicts — no GPS coordinates.
+    """
+    # Build a lookup of stream-computed fields keyed by activity id
+    stream_extras = {}
+    if STREAMS_DIR.exists():
+        for path in STREAMS_DIR.glob("*.json"):
+            try:
+                with open(path) as f:
+                    s = json.load(f)
+                stream_extras[s["id"]] = {
+                    "hr_zones": s.get("hr_zones"),
+                    "avg_speed_kmh": s.get("avg_speed_kmh"),
+                    "max_speed_kmh": s.get("max_speed_kmh"),
+                    "suffer_score": s.get("suffer_score"),
+                    "average_watts": s.get("average_watts"),
+                    "weighted_average_watts": s.get("weighted_average_watts"),
+                    "kilojoules": s.get("kilojoules"),
+                    "average_cadence": s.get("average_cadence"),
+                    "pr_count": s.get("pr_count", 0),
+                }
+            except (json.JSONDecodeError, OSError, KeyError):
+                continue
+
+    try:
+        activities = load_activities()
+    except (RuntimeError, OSError):
+        return []
+
+    result = []
+    for a in activities:
+        extras = stream_extras.get(a["id"], {})
+        result.append({
+            "id": a["id"],
+            "name": a["name"],
+            "sport_type": a["sport_type"],
+            "start_date": a["start_date"],
+            "distance_km": round(a.get("distance", 0) / 1000, 2),
+            "elapsed_time": a.get("elapsed_time", 0),
+            "moving_time": a.get("moving_time", 0),
+            "total_elevation_gain": a.get("total_elevation_gain"),
+            "average_heartrate": a.get("average_heartrate"),
+            "max_heartrate": a.get("max_heartrate"),
+            "average_speed_kmh": round(a["average_speed"] * 3.6, 2) if a.get("average_speed") else None,
+            "suffer_score": extras.get("suffer_score") or a.get("suffer_score"),
+            "average_watts": extras.get("average_watts") or a.get("average_watts"),
+            "weighted_average_watts": extras.get("weighted_average_watts") or a.get("weighted_average_watts"),
+            "kilojoules": extras.get("kilojoules") or a.get("kilojoules"),
+            "average_cadence": extras.get("average_cadence") or a.get("average_cadence"),
+            "pr_count": extras.get("pr_count") or a.get("pr_count", 0),
+            "hr_zones": extras.get("hr_zones"),
+            "location_city": a.get("location_city", ""),
+            "location_country": a.get("location_country", ""),
+        })
+    return result
 
 
 def get_cities(country=None):
