@@ -191,6 +191,9 @@ def api_setup_osm_email():
 
 @app.route("/api/setup/clear", methods=["POST"])
 def api_setup_clear():
+    # Reject form-based CSRF: simple form posts cannot set application/json
+    if not request.is_json:
+        return jsonify({"error": "bad_request"}), 400
     creds_store.clear()
     auth.clear_token()
     fetch.clear_cache()
@@ -232,11 +235,20 @@ def api_update_activity(activity_id):
         return err
     body = request.get_json(silent=True) or {}
     new_name = (body.get("name") or "").strip()
-    if not new_name:
-        return jsonify({"error": "name is required"}), 400
+    new_sport_type = (body.get("sport_type") or "").strip()
+    if not new_name and not new_sport_type:
+        return jsonify({"error": "name or sport_type is required"}), 400
+    if new_name and new_sport_type:
+        return jsonify({"error": "send name and sport_type in separate requests"}), 400
     try:
-        actual_name = fetch.update_activity_name(activity_id, new_name)
-        return jsonify({"name": actual_name})
+        result = {}
+        if new_name:
+            result["name"] = fetch.update_activity_name(activity_id, new_name)
+        if new_sport_type:
+            actual_type, color = fetch.update_activity_sport_type(activity_id, new_sport_type)
+            result["sport_type"] = actual_type
+            result["color"] = color
+        return jsonify(result)
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except http_requests.HTTPError as e:

@@ -407,6 +407,57 @@ def update_activity_name(activity_id, new_name):
     return actual_name
 
 
+def update_activity_sport_type(activity_id, sport_type):
+    """Push a sport_type change to Strava and update local cache. Returns the saved sport_type."""
+    from config import SPORT_COLORS, DEFAULT_COLOR
+
+    resp = requests.put(
+        f"{STRAVA_API_BASE}/activities/{activity_id}",
+        headers=_headers(),
+        json={"sport_type": sport_type},
+        timeout=15,
+    )
+    if resp.status_code == 403:
+        raise PermissionError(
+            "Missing activity:write permission — please logout and reconnect to Strava"
+        )
+    resp.raise_for_status()
+    actual_sport_type = resp.json().get("sport_type", sport_type)
+    new_color = SPORT_COLORS.get(actual_sport_type, DEFAULT_COLOR)
+
+    # Update stream cache file
+    path = _stream_path(activity_id)
+    if path.exists():
+        try:
+            with open(path) as f:
+                stream = json.load(f)
+            stream["sport_type"] = actual_sport_type
+            with open(path, "w") as f:
+                json.dump(stream, f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Update activities.json
+    if ACTIVITIES_FILE.exists():
+        try:
+            with open(ACTIVITIES_FILE) as f:
+                activities = json.load(f)
+            for a in activities:
+                if a["id"] == activity_id:
+                    a["sport_type"] = actual_sport_type
+                    break
+            with open(ACTIVITIES_FILE, "w") as f:
+                json.dump(activities, f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Invalidate in-memory route cache
+    global _route_data_mtime
+    _route_data_mtime = 0.0
+
+    return actual_sport_type, new_color
+
+
 def _backfill_cities_nominatim():
     """
     For cached streams that still have no location_city after the activities.json
