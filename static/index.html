@@ -10,6 +10,167 @@
     />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <style>
+      /* ── Theme variables ── */
+      :root {
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: #1a1a2e;
+        --bg-panel: #16213e;
+        --bg-deep: #12192a;
+        --bg-input: #0f3460;
+        --bg-input-dark: #0d1626;
+        --bg-chat: #131b2e;
+        --border: #0f3460;
+        --border-light: #1a4a8a;
+        --accent: #fc4c02;
+        --accent-hover: #e04000;
+        --accent-dim: #8a3000;
+        --text: #e0e0e0;
+        --text-bright: #ccc;
+        --text-muted: #aaa;
+        --text-dim: #888;
+        --text-faint: #556;
+        --danger: #c0392b;
+        --danger-hover: #a93226;
+        --bg-overlay: rgba(22, 33, 62, 0.92);
+        --bg-panel-alpha: rgba(18, 25, 42, 0.97);
+        --shadow: rgba(0, 0, 0, 0.5);
+        --scrollbar: #1a4a8a;
+        --chat-user-bg: #0f3460;
+        --chat-asst-bg: #1a2a46;
+      }
+
+      [data-theme="cyberpunk"] {
+        --font: "Courier New", Courier, monospace;
+        --bg: #0a000f;
+        --bg-panel: #0f0020;
+        --bg-deep: #060010;
+        --bg-input: #1c0040;
+        --bg-input-dark: #0a000f;
+        --bg-chat: #0d0020;
+        --border: #00fff9;
+        --border-light: #ff00ff;
+        --accent: #ff00ff;
+        --accent-hover: #cc00cc;
+        --accent-dim: #660066;
+        --text: #00fff9;
+        --text-bright: #ffffff;
+        --text-muted: #00ccbb;
+        --text-dim: #00998a;
+        --text-faint: #005555;
+        --danger: #ff0044;
+        --danger-hover: #cc0033;
+        --bg-overlay: rgba(15, 0, 32, 0.95);
+        --bg-panel-alpha: rgba(6, 0, 16, 0.97);
+        --shadow: rgba(0, 255, 249, 0.12);
+        --scrollbar: #ff00ff;
+        --chat-user-bg: #1c0040;
+        --chat-asst-bg: #0f0030;
+      }
+
+      [data-theme="classical"] {
+        --font: Georgia, "Times New Roman", serif;
+        --bg: #1c1208;
+        --bg-panel: #2a1c0e;
+        --bg-deep: #160e04;
+        --bg-input: #3d2510;
+        --bg-input-dark: #1c1208;
+        --bg-chat: #241608;
+        --border: #7a5c20;
+        --border-light: #c8a84b;
+        --accent: #c8a84b;
+        --accent-hover: #b8941a;
+        --accent-dim: #6b520e;
+        --text: #f0e0c0;
+        --text-bright: #fff8f0;
+        --text-muted: #c8b090;
+        --text-dim: #a08060;
+        --text-faint: #7a6050;
+        --danger: #8b2020;
+        --danger-hover: #6b1818;
+        --bg-overlay: rgba(42, 28, 14, 0.95);
+        --bg-panel-alpha: rgba(22, 14, 4, 0.97);
+        --shadow: rgba(0, 0, 0, 0.6);
+        --scrollbar: #7a5c20;
+        --chat-user-bg: #3d2510;
+        --chat-asst-bg: #301a08;
+      }
+
+      [data-theme="alp"] {
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: #0d1a0f;
+        --bg-panel: #0f2418;
+        --bg-deep: #081208;
+        --bg-input: #1a3a22;
+        --bg-input-dark: #0d1a0f;
+        --bg-chat: #0f2018;
+        --border: #2d6a3f;
+        --border-light: #4a9460;
+        --accent: #5cb87a;
+        --accent-hover: #4aa066;
+        --accent-dim: #256635;
+        --text: #e8f4e8;
+        --text-bright: #f5fff5;
+        --text-muted: #a8c8a8;
+        --text-dim: #7a9a7a;
+        --text-faint: #4a6a4a;
+        --danger: #c0392b;
+        --danger-hover: #a93226;
+        --bg-overlay: rgba(15, 36, 24, 0.95);
+        --bg-panel-alpha: rgba(8, 18, 8, 0.97);
+        --shadow: rgba(0, 0, 0, 0.5);
+        --scrollbar: #2d6a3f;
+        --chat-user-bg: #1a3a22;
+        --chat-asst-bg: #162a1c;
+      }
+
+      /* ── Cyberpunk glow accents ── */
+      [data-theme="cyberpunk"] header,
+      [data-theme="cyberpunk"] #sidebar,
+      [data-theme="cyberpunk"] #stats-bar {
+        box-shadow: inset 0 0 40px rgba(0, 255, 249, 0.04);
+      }
+      [data-theme="cyberpunk"] .btn-primary {
+        box-shadow: 0 0 14px rgba(255, 0, 255, 0.55);
+        text-shadow: 0 0 6px rgba(255, 0, 255, 0.9);
+      }
+      [data-theme="cyberpunk"] .logo {
+        text-shadow: 0 0 12px var(--accent);
+        letter-spacing: 3px;
+      }
+      [data-theme="cyberpunk"] #map-layer-control,
+      [data-theme="cyberpunk"] #legend,
+      [data-theme="cyberpunk"] #stats-panel,
+      [data-theme="cyberpunk"] #elevation-panel,
+      [data-theme="cyberpunk"] #sync-overlay {
+        box-shadow: 0 0 14px rgba(0, 255, 249, 0.25);
+      }
+      [data-theme="cyberpunk"] .activity-item.active {
+        box-shadow: inset 3px 0 8px rgba(255, 0, 255, 0.25);
+      }
+
+      /* ── Classical refinements ── */
+      [data-theme="classical"] .logo {
+        letter-spacing: 2px;
+        font-style: italic;
+      }
+      [data-theme="classical"] header,
+      [data-theme="classical"] #sidebar {
+        border-bottom-width: 2px;
+      }
+      [data-theme="classical"] #stats-panel,
+      [data-theme="classical"] #elevation-panel {
+        border-width: 2px;
+        border-radius: 2px;
+      }
+
+      /* ── Alp clean feel ── */
+      [data-theme="alp"] header {
+        border-bottom-width: 2px;
+      }
+      [data-theme="alp"] #sidebar {
+        border-right-width: 2px;
+      }
+
       * {
         box-sizing: border-box;
         margin: 0;
@@ -17,9 +178,9 @@
       }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #1a1a2e;
-        color: #e0e0e0;
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
         height: 100vh;
         display: flex;
         flex-direction: column;
@@ -27,8 +188,8 @@
 
       /* ── Header ── */
       header {
-        background: #16213e;
-        border-bottom: 1px solid #0f3460;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
         padding: 10px 16px;
         display: flex;
         align-items: center;
@@ -41,11 +202,11 @@
       .logo {
         font-weight: 700;
         font-size: 1.1rem;
-        color: #fc4c02;
+        color: var(--accent);
         white-space: nowrap;
       }
       .athlete-name {
-        color: #aaa;
+        color: var(--text-muted);
         font-size: 0.85rem;
       }
 
@@ -59,7 +220,7 @@
 
       label {
         font-size: 0.8rem;
-        color: #888;
+        color: var(--text-dim);
         white-space: nowrap;
       }
 
@@ -67,9 +228,9 @@
       input[type="text"],
       input[type="password"],
       select {
-        background: #0f3460;
-        border: 1px solid #1a4a8a;
-        color: #e0e0e0;
+        background: var(--bg-input);
+        border: 1px solid var(--border-light);
+        color: var(--text);
         padding: 5px 8px;
         border-radius: 4px;
         font-size: 0.85rem;
@@ -78,11 +239,11 @@
       input[type="text"]:focus,
       input[type="password"]:focus {
         outline: none;
-        border-color: #fc4c02;
+        border-color: var(--accent);
       }
 
       select option {
-        background: #0f3460;
+        background: var(--bg-input);
       }
 
       button {
@@ -96,46 +257,46 @@
       }
 
       .btn-primary {
-        background: #fc4c02;
+        background: var(--accent);
         color: #fff;
       }
       .btn-primary:hover {
-        background: #e04000;
+        background: var(--accent-hover);
       }
       .btn-primary:disabled {
-        background: #8a3000;
+        background: var(--accent-dim);
         cursor: default;
       }
       .btn-secondary {
-        background: #0f3460;
-        color: #e0e0e0;
-        border: 1px solid #1a4a8a;
+        background: var(--bg-input);
+        color: var(--text);
+        border: 1px solid var(--border-light);
       }
       .btn-secondary:hover {
-        background: #1a4a8a;
+        background: var(--border-light);
       }
       .btn-danger {
-        background: #c0392b;
+        background: var(--danger);
         color: #fff;
       }
       .btn-danger:hover {
-        background: #a93226;
+        background: var(--danger-hover);
       }
 
       /* ── Stats bar ── */
       #stats-bar {
-        background: #12192a;
+        background: var(--bg-deep);
         padding: 5px 16px;
         font-size: 0.78rem;
-        color: #888;
+        color: var(--text-dim);
         display: flex;
         gap: 16px;
         align-items: center;
-        border-bottom: 1px solid #0f3460;
+        border-bottom: 1px solid var(--border);
         flex-shrink: 0;
       }
       #stats-bar span {
-        color: #ccc;
+        color: var(--text-bright);
       }
 
       /* ── Full-page panels (setup / login) ── */
@@ -157,10 +318,10 @@
       .panel-title {
         font-size: 2rem;
         font-weight: 700;
-        color: #fc4c02;
+        color: var(--accent);
       }
       .panel-sub {
-        color: #888;
+        color: var(--text-dim);
         max-width: 400px;
         line-height: 1.6;
         font-size: 0.95rem;
@@ -168,8 +329,8 @@
 
       /* ── Setup form card ── */
       .setup-card {
-        background: #16213e;
-        border: 1px solid #0f3460;
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
         border-radius: 10px;
         padding: 28px 32px;
         width: 100%;
@@ -180,10 +341,10 @@
       .setup-card h2 {
         font-size: 1rem;
         font-weight: 600;
-        color: #ccc;
+        color: var(--text-bright);
         margin-bottom: 20px;
         padding-bottom: 12px;
-        border-bottom: 1px solid #0f3460;
+        border-bottom: 1px solid var(--border);
       }
 
       .field-row {
@@ -193,7 +354,7 @@
       .field-row label {
         display: block;
         font-size: 0.8rem;
-        color: #888;
+        color: var(--text-dim);
         margin-bottom: 5px;
       }
 
@@ -205,7 +366,7 @@
 
       .field-hint {
         font-size: 0.72rem;
-        color: #556;
+        color: var(--text-faint);
         margin-top: 4px;
       }
 
@@ -222,11 +383,11 @@
 
       .setup-error {
         background: rgba(192, 57, 43, 0.15);
-        border: 1px solid #c0392b;
+        border: 1px solid var(--danger);
         border-radius: 4px;
         padding: 8px 12px;
         font-size: 0.8rem;
-        color: #e74c3c;
+        color: var(--danger);
         margin-top: 12px;
         display: none;
       }
@@ -237,7 +398,7 @@
       }
 
       .btn-strava {
-        background: #fc4c02;
+        background: var(--accent);
         color: #fff;
         padding: 12px 28px;
         border-radius: 6px;
@@ -247,31 +408,31 @@
         display: inline-block;
       }
       .btn-strava:hover {
-        background: #e04000;
+        background: var(--accent-hover);
       }
 
       /* ── Login page credential card ── */
       .cred-card {
-        background: #16213e;
-        border: 1px solid #0f3460;
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 14px 20px;
         display: flex;
         align-items: center;
         gap: 12px;
         font-size: 0.85rem;
-        color: #aaa;
+        color: var(--text-muted);
         max-width: 340px;
         width: 100%;
       }
 
       .cred-card .cred-label {
-        color: #556;
+        color: var(--text-faint);
         font-size: 0.75rem;
         margin-bottom: 2px;
       }
       .cred-card .cred-value {
-        color: #e0e0e0;
+        color: var(--text);
         font-weight: 600;
         font-family: monospace;
       }
@@ -289,20 +450,20 @@
 
       .btn-outline {
         background: transparent;
-        border: 1px solid #1a4a8a;
-        color: #aaa;
+        border: 1px solid var(--border-light);
+        color: var(--text-muted);
         font-size: 0.8rem;
         padding: 6px 14px;
       }
       .btn-outline:hover {
-        background: #0f3460;
-        color: #e0e0e0;
+        background: var(--bg-input);
+        color: var(--text);
       }
 
       .btn-outline-danger {
         background: transparent;
-        border: 1px solid #7a2020;
-        color: #e07070;
+        border: 1px solid var(--danger);
+        color: var(--danger);
         font-size: 0.8rem;
         padding: 6px 14px;
       }
@@ -325,8 +486,8 @@
         left: 0;
         bottom: 0;
         width: 280px;
-        background: #131b2e;
-        border-right: 1px solid #0f3460;
+        background: var(--bg-chat);
+        border-right: 1px solid var(--border);
         display: flex;
         flex-direction: column;
         z-index: 400;
@@ -339,9 +500,9 @@
 
       #sidebar-header {
         padding: 9px 12px;
-        border-bottom: 1px solid #0f3460;
+        border-bottom: 1px solid var(--border);
         font-size: 0.75rem;
-        color: #667;
+        color: var(--text-faint);
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -349,22 +510,22 @@
       }
 
       #sidebar-count {
-        color: #aaa;
+        color: var(--text-muted);
       }
 
       #sidebar-search {
         width: 100%;
-        background: #0d1626;
+        background: var(--bg-input-dark);
         border: none;
-        border-bottom: 1px solid #0f3460;
-        color: #e0e0e0;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
         padding: 7px 12px;
         font-size: 0.82rem;
         outline: none;
         flex-shrink: 0;
       }
       #sidebar-search::placeholder {
-        color: #445;
+        color: var(--text-faint);
       }
 
       #sidebar-list {
@@ -380,7 +541,7 @@
         background: transparent;
       }
       #sidebar-list::-webkit-scrollbar-thumb {
-        background: #1a4a8a;
+        background: var(--scrollbar);
         border-radius: 2px;
       }
 
@@ -389,19 +550,19 @@
         align-items: flex-start;
         gap: 9px;
         padding: 9px 12px;
-        border-bottom: 1px solid #0d1828;
+        border-bottom: 1px solid var(--bg-deep);
         cursor: pointer;
         transition: background 0.1s;
         border-left: 3px solid transparent;
       }
 
       .activity-item:hover {
-        background: #1a2a46;
+        background: var(--bg-input);
       }
 
       .activity-item.active {
-        background: #162040;
-        border-left-color: #fc4c02;
+        background: var(--bg-input-dark);
+        border-left-color: var(--accent);
       }
 
       .activity-dot {
@@ -420,7 +581,7 @@
       .activity-name {
         font-size: 0.82rem;
         font-weight: 600;
-        color: #ddd;
+        color: var(--text-bright);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -428,7 +589,7 @@
 
       .activity-meta {
         font-size: 0.71rem;
-        color: #556;
+        color: var(--text-faint);
         margin-top: 2px;
         white-space: nowrap;
         overflow: hidden;
@@ -439,7 +600,7 @@
         padding: 24px 12px;
         text-align: center;
         font-size: 0.8rem;
-        color: #445;
+        color: var(--text-faint);
       }
 
       /* ── Sidebar toggle button ── */
@@ -449,10 +610,10 @@
         left: 280px;
         transform: translateY(-50%);
         z-index: 401;
-        background: #16213e;
-        border: 1px solid #0f3460;
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
         border-left: none;
-        color: #888;
+        color: var(--text-dim);
         padding: 8px 4px;
         cursor: pointer;
         border-radius: 0 4px 4px 0;
@@ -464,7 +625,7 @@
       }
 
       #sidebar-toggle:hover {
-        background: #1a4a8a;
+        background: var(--border-light);
         color: #fff;
       }
       #sidebar.collapsed ~ #sidebar-toggle {
@@ -492,13 +653,13 @@
         position: fixed;
         bottom: 20px;
         right: 20px;
-        background: #16213e;
-        border: 1px solid #0f3460;
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 12px 16px;
         z-index: 2000;
         min-width: 220px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 20px var(--shadow);
       }
       #sync-overlay.visible {
         display: block;
@@ -508,34 +669,34 @@
         font-weight: 600;
         font-size: 0.85rem;
         margin-bottom: 6px;
-        color: #fc4c02;
+        color: var(--accent);
       }
 
       .progress-bar {
-        background: #0f3460;
+        background: var(--bg-input);
         border-radius: 3px;
         height: 6px;
         overflow: hidden;
         margin: 6px 0;
       }
       .progress-fill {
-        background: #fc4c02;
+        background: var(--accent);
         height: 100%;
         transition: width 0.3s ease;
       }
       .sync-detail {
         font-size: 0.75rem;
-        color: #888;
+        color: var(--text-dim);
       }
 
       /* ── Popup ── */
       .leaflet-popup-content-wrapper {
-        background: #16213e;
-        color: #e0e0e0;
-        border: 1px solid #0f3460;
+        background: var(--bg-panel);
+        color: var(--text);
+        border: 1px solid var(--border);
       }
       .leaflet-popup-tip {
-        background: #16213e;
+        background: var(--bg-panel);
       }
       .leaflet-popup-content {
         min-width: 190px;
@@ -547,15 +708,15 @@
       }
       .popup-row {
         font-size: 0.8rem;
-        color: #aaa;
+        color: var(--text-muted);
         margin-top: 3px;
       }
       .popup-row span {
-        color: #e0e0e0;
+        color: var(--text);
       }
       .popup-dim {
         font-size: 0.75rem;
-        color: #667;
+        color: var(--text-faint);
         margin-left: 4px;
       }
 
@@ -565,11 +726,11 @@
         bottom: 90px;
         right: 10px;
         width: 320px;
-        background: rgba(18, 25, 42, 0.96);
-        border: 1px solid #0f3460;
+        background: var(--bg-panel-alpha);
+        border: 1px solid var(--border);
         border-radius: 8px;
         z-index: 500;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 20px var(--shadow);
         overflow: hidden;
       }
       #elevation-header {
@@ -579,22 +740,22 @@
         padding: 7px 10px 5px;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #aaa;
-        border-bottom: 1px solid #0f3460;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border);
         cursor: move;
         user-select: none;
       }
       #elevation-close {
         background: none;
         border: none;
-        color: #556;
+        color: var(--text-faint);
         cursor: pointer;
         font-size: 0.9rem;
         padding: 0 2px;
         line-height: 1;
       }
       #elevation-close:hover {
-        color: #aaa;
+        color: var(--text-muted);
       }
       #elevation-canvas-wrap {
         padding: 6px 8px 8px;
@@ -606,8 +767,8 @@
         position: absolute;
         bottom: 30px;
         right: 10px;
-        background: rgba(22, 33, 62, 0.92);
-        border: 1px solid #0f3460;
+        background: var(--bg-overlay);
+        border: 1px solid var(--border);
         border-radius: 6px;
         padding: 8px 12px;
         z-index: 500;
@@ -631,24 +792,25 @@
       #map-layer-control {
         position: absolute;
         bottom: 30px;
-        left: 10px;
+        left: 290px;
         z-index: 500;
-        background: rgba(22, 33, 62, 0.92);
-        border: 1px solid #0f3460;
+        background: var(--bg-overlay);
+        border: 1px solid var(--border);
         border-radius: 6px;
         padding: 4px 8px;
+        transition: left 0.25s ease;
       }
       #map-layer-control select {
         background: transparent;
         border: none;
-        color: #e0e0e0;
+        color: var(--text);
         font-size: 0.75rem;
         cursor: pointer;
         outline: none;
       }
       #map-layer-control select option {
-        background: #16213e;
-        color: #e0e0e0;
+        background: var(--bg-panel);
+        color: var(--text);
       }
 
       /* ── Draggable stats panel ── */
@@ -657,11 +819,11 @@
         top: 10px;
         right: 10px;
         width: 230px;
-        background: rgba(18, 25, 42, 0.97);
-        border: 1px solid #0f3460;
+        background: var(--bg-panel-alpha);
+        border: 1px solid var(--border);
         border-radius: 8px;
         z-index: 500;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 20px var(--shadow);
       }
       #stats-panel-header {
         user-select: none;
@@ -671,21 +833,21 @@
         padding: 7px 10px 5px;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #aaa;
-        border-bottom: 1px solid #0f3460;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border);
         cursor: move;
       }
       #stats-panel-close {
         background: none;
         border: none;
-        color: #556;
+        color: var(--text-faint);
         cursor: pointer;
         font-size: 0.9rem;
         padding: 0 2px;
         line-height: 1;
       }
       #stats-panel-close:hover {
-        color: #aaa;
+        color: var(--text-muted);
       }
       #stats-panel-content {
         padding: 8px 12px 10px;
@@ -694,7 +856,7 @@
       .btn-icon {
         background: none;
         border: none;
-        color: #556;
+        color: var(--text-faint);
         cursor: pointer;
         font-size: 0.8rem;
         padding: 0 3px;
@@ -702,14 +864,14 @@
         flex-shrink: 0;
       }
       .btn-icon:hover {
-        color: #aaa;
+        color: var(--text-muted);
       }
 
       #name-edit-row input[type="text"] {
         width: 100%;
-        background: #0f3460;
-        border: 1px solid #1a4a8a;
-        color: #e0e0e0;
+        background: var(--bg-input);
+        border: 1px solid var(--border-light);
+        color: var(--text);
         padding: 5px 8px;
         border-radius: 4px;
         font-size: 0.82rem;
@@ -717,7 +879,7 @@
       }
       #name-edit-row input[type="text"]:focus {
         outline: none;
-        border-color: #fc4c02;
+        border-color: var(--accent);
       }
 
       /* ── Chat panel ── */
@@ -727,8 +889,8 @@
         right: 0;
         bottom: 0;
         width: 300px;
-        background: #131b2e;
-        border-left: 1px solid #0f3460;
+        background: var(--bg-chat);
+        border-left: 1px solid var(--border);
         display: flex;
         flex-direction: column;
         z-index: 400;
@@ -741,14 +903,14 @@
 
       #chat-panel-header {
         padding: 8px 10px;
-        border-bottom: 1px solid #0f3460;
+        border-bottom: 1px solid var(--border);
         display: flex;
         align-items: center;
         gap: 8px;
         flex-shrink: 0;
         font-size: 0.8rem;
         font-weight: 600;
-        color: #aaa;
+        color: var(--text-muted);
       }
 
       #chat-panel-header span {
@@ -756,9 +918,9 @@
       }
 
       #chat-model-select {
-        background: #0f3460;
-        border: 1px solid #1a4a8a;
-        color: #e0e0e0;
+        background: var(--bg-input);
+        border: 1px solid var(--border-light);
+        color: var(--text);
         padding: 3px 6px;
         border-radius: 4px;
         font-size: 0.75rem;
@@ -768,14 +930,14 @@
       #chat-panel-close {
         background: none;
         border: none;
-        color: #556;
+        color: var(--text-faint);
         cursor: pointer;
         font-size: 0.9rem;
         padding: 0 2px;
         line-height: 1;
       }
       #chat-panel-close:hover {
-        color: #aaa;
+        color: var(--text-muted);
       }
 
       #chat-messages {
@@ -794,7 +956,7 @@
         background: transparent;
       }
       #chat-messages::-webkit-scrollbar-thumb {
-        background: #1a4a8a;
+        background: var(--scrollbar);
         border-radius: 2px;
       }
 
@@ -809,21 +971,21 @@
       }
 
       .chat-msg-user {
-        background: #0f3460;
-        color: #e0e0e0;
+        background: var(--bg-input);
+        color: var(--text);
         align-self: flex-end;
         border-bottom-right-radius: 2px;
       }
 
       .chat-msg-assistant {
-        background: #1a2a46;
-        color: #ddd;
+        background: var(--chat-asst-bg);
+        color: var(--text-bright);
         align-self: flex-start;
         border-bottom-left-radius: 2px;
       }
 
       .chat-msg-thinking {
-        color: #556;
+        color: var(--text-faint);
         font-style: italic;
         font-size: 0.75rem;
         align-self: flex-start;
@@ -833,26 +995,26 @@
         display: flex;
         gap: 6px;
         padding: 8px 10px;
-        border-top: 1px solid #0f3460;
+        border-top: 1px solid var(--border);
         flex-shrink: 0;
       }
 
       #chat-input {
         flex: 1;
-        background: #0d1626;
-        border: 1px solid #1a4a8a;
-        color: #e0e0e0;
+        background: var(--bg-input-dark);
+        border: 1px solid var(--border-light);
+        color: var(--text);
         padding: 6px 8px;
         border-radius: 4px;
         font-size: 0.82rem;
         outline: none;
       }
       #chat-input:focus {
-        border-color: #fc4c02;
+        border-color: var(--accent);
       }
 
       #chat-send-btn {
-        background: #fc4c02;
+        background: var(--accent);
         color: #fff;
         border: none;
         border-radius: 4px;
@@ -861,10 +1023,10 @@
         cursor: pointer;
       }
       #chat-send-btn:hover {
-        background: #e04000;
+        background: var(--accent-hover);
       }
       #chat-send-btn:disabled {
-        background: #8a3000;
+        background: var(--accent-dim);
         cursor: default;
       }
 
@@ -875,10 +1037,10 @@
         right: 300px;
         transform: translateY(-50%);
         z-index: 401;
-        background: #16213e;
-        border: 1px solid #0f3460;
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
         border-right: none;
-        color: #888;
+        color: var(--text-dim);
         padding: 8px 4px;
         cursor: pointer;
         border-radius: 4px 0 0 4px;
@@ -888,7 +1050,7 @@
         display: none;
       }
       #chat-toggle:hover {
-        background: #1a4a8a;
+        background: var(--border-light);
         color: #fff;
       }
       #chat-panel.hidden ~ #chat-toggle {
@@ -1083,6 +1245,10 @@
         <select id="filter-city" onchange="applyFilters()">
           <option value="">All cities</option>
         </select>
+        <label>Type</label>
+        <select id="filter-type" onchange="applyTypeFilter()">
+          <option value="">All types</option>
+        </select>
         <button class="btn-secondary" onclick="clearFilters()">Clear</button>
       </div>
 
@@ -1101,6 +1267,15 @@
       >
         Sync All
       </button>
+      <div style="display:flex;align-items:center;gap:5px;margin-left:4px">
+        <label style="font-size:0.75rem">Style</label>
+        <select id="theme-select" onchange="switchTheme(this.value)" title="UI theme">
+          <option value="general">🌐 General</option>
+          <option value="cyberpunk">⚡ Cyberpunk</option>
+          <option value="classical">📜 Classical</option>
+          <option value="alp">🏔 Alp</option>
+        </select>
+      </div>
       <button class="btn-danger" onclick="logout()" style="margin-left: 4px">
         Logout
       </button>
@@ -1232,12 +1407,30 @@
       let layerById = {}; // activity id → leaflet layer
       let activeId = null; // currently selected activity id
       let allFeatures = []; // full unfiltered feature list (for sidebar search)
+      let currentTypeFilter = '';
       let sidebarCollapsed = false;
       let elevationChart = null;
       let currentTileLayer = null;
       let currentActivityProps = null; // properties of the focused activity
 
       // ── Boot ─────────────────────────────────────────────────────────────────────
+      // ── Theme switcher ────────────────────────────────────────────────────────────
+      function switchTheme(theme) {
+        if (theme === "general") {
+          document.documentElement.removeAttribute("data-theme");
+        } else {
+          document.documentElement.setAttribute("data-theme", theme);
+        }
+        localStorage.setItem("s2e-theme", theme);
+        const sel = document.getElementById("theme-select");
+        if (sel) sel.value = theme;
+      }
+
+      (function applyStoredTheme() {
+        const saved = localStorage.getItem("s2e-theme") || "general";
+        switchTheme(saved);
+      })();
+
       async function init() {
         const status = await apiFetch("/api/status");
         if (!status) return;
@@ -1394,7 +1587,7 @@
 
       // Called from login page — clear old credential and go to setup form for a new one
       async function useNewCredential() {
-        await apiFetch("/api/setup/clear", { method: "POST" });
+        await apiFetch("/api/setup/clear", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
         document.getElementById("input-client-id").value = "";
         document.getElementById("input-client-secret").value = "";
         document.getElementById("input-osm-email").value = "";
@@ -1405,7 +1598,7 @@
 
       // Called from login page — delete credential only, return to setup page
       async function deleteCredential() {
-        await apiFetch("/api/setup/clear", { method: "POST" });
+        await apiFetch("/api/setup/clear", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
         document.getElementById("input-client-id").value = "";
         document.getElementById("input-client-secret").value = "";
         document.getElementById("input-osm-email").value = "";
@@ -1522,7 +1715,8 @@
         const geojson = await apiFetch("/api/routes?" + params.toString());
         if (!geojson) return;
 
-        // Clear previous state
+        // Clear previous state — defocusActivity hides stats/elevation panels
+        defocusActivity();
         if (routeLayer) {
           map.removeLayer(routeLayer);
           routeLayer = null;
@@ -1532,6 +1726,14 @@
         document.getElementById("sidebar-search").value = "";
 
         if (!geojson.features || geojson.features.length === 0) {
+          allFeatures = [];
+          currentTypeFilter = "";
+          const typeSelEl = document.getElementById("filter-type");
+          typeSelEl.textContent = "";
+          const emptyOpt = document.createElement("option");
+          emptyOpt.value = ""; emptyOpt.textContent = "All types";
+          typeSelEl.appendChild(emptyOpt);
+          document.getElementById("legend").style.display = "none";
           updateStats(0, 0);
           buildSidebar([]);
           return;
@@ -1561,13 +1763,16 @@
               }
             });
             layer.on("mouseover", function () {
-              if (p.id !== activeId) this.setStyle({ weight: 3, opacity: 1 });
+              const visible = !currentTypeFilter || p.sport_type === currentTypeFilter;
+              if (p.id !== activeId && visible) this.setStyle({ weight: 3, opacity: 1 });
             });
             layer.on("mouseout", function () {
-              if (p.id !== activeId && activeId !== null)
+              if (p.id !== activeId && activeId !== null) {
                 this.setStyle({ opacity: 0, weight: 0 });
-              else if (p.id !== activeId)
-                this.setStyle({ weight: 2, opacity: 0.6 });
+              } else if (p.id !== activeId) {
+                const visible = !currentTypeFilter || p.sport_type === currentTypeFilter;
+                this.setStyle({ weight: visible ? 2 : 0, opacity: visible ? 0.6 : 0 });
+              }
             });
 
             layerById[p.id] = layer;
@@ -1584,7 +1789,26 @@
         });
         updateStats(geojson.features.length, totalKm);
         buildLegend(geojson.features);
-        buildSidebar(allFeatures);
+
+        // Repopulate type dropdown from loaded features, preserving selection if still valid
+        const typeSelect = document.getElementById("filter-type");
+        const savedType = typeSelect.value;
+        const types = [...new Set(allFeatures.map((f) => f.properties.sport_type).filter(Boolean))].sort();
+        typeSelect.textContent = "";
+        const allOpt = document.createElement("option");
+        allOpt.value = "";
+        allOpt.textContent = "All types";
+        typeSelect.appendChild(allOpt);
+        types.forEach((t) => {
+          const opt = document.createElement("option");
+          opt.value = t;
+          opt.textContent = t;
+          if (t === savedType) opt.selected = true;
+          typeSelect.appendChild(opt);
+        });
+        currentTypeFilter = typeSelect.value;
+
+        applyTypeFilter();
       }
 
       // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -1627,12 +1851,46 @@
 
       function filterSidebar(query) {
         const q = query.toLowerCase().trim();
-        const filtered = q
-          ? allFeatures.filter((f) =>
-              f.properties.name.toLowerCase().includes(q),
-            )
+        let filtered = currentTypeFilter
+          ? allFeatures.filter((f) => f.properties.sport_type === currentTypeFilter)
           : allFeatures;
+        if (q) filtered = filtered.filter((f) => f.properties.name.toLowerCase().includes(q));
         buildSidebar(filtered);
+      }
+
+      function applyTypeFilter() {
+        currentTypeFilter = document.getElementById("filter-type").value;
+
+        // If the focused activity doesn't match the new type, clear it first
+        if (activeId !== null && currentTypeFilter) {
+          const activeProp = layerById[activeId] && layerById[activeId].feature && layerById[activeId].feature.properties;
+          if (!activeProp || activeProp.sport_type !== currentTypeFilter) {
+            defocusActivity();
+          }
+        }
+
+        // Update sidebar (also applying any active name search)
+        filterSidebar(document.getElementById("sidebar-search").value);
+
+        // Update map layer visibility
+        if (activeId === null) {
+          Object.values(layerById).forEach((l) => {
+            const p = l.feature && l.feature.properties;
+            const visible = !currentTypeFilter || (p && p.sport_type === currentTypeFilter);
+            l.setStyle({
+              color: (p && p.color) || "#fc4c02",
+              weight: visible ? 2 : 0,
+              opacity: visible ? 0.6 : 0,
+            });
+          });
+        }
+
+        // Update stats bar to reflect visible routes
+        const visibleFeatures = currentTypeFilter
+          ? allFeatures.filter((f) => f.properties.sport_type === currentTypeFilter)
+          : allFeatures;
+        const filteredKm = visibleFeatures.reduce((sum, f) => sum + (f.properties.distance_km || 0), 0);
+        updateStats(visibleFeatures.length, filteredKm);
       }
 
       // ── Focus an activity ─────────────────────────────────────────────────────────
@@ -1673,13 +1931,14 @@
       }
 
       function defocusActivity() {
-        // Restore all routes
+        // Restore routes (respecting active type filter)
         Object.values(layerById).forEach((l) => {
           const p = l.feature && l.feature.properties;
+          const visible = !currentTypeFilter || (p && p.sport_type === currentTypeFilter);
           l.setStyle({
             color: (p && p.color) || "#fc4c02",
-            weight: 2,
-            opacity: 0.6,
+            weight: visible ? 2 : 0,
+            opacity: visible ? 0.6 : 0,
           });
         });
         activeId = null;
@@ -1736,7 +1995,20 @@
       </div>
       <div id="name-edit-msg" style="font-size:0.72rem;margin-top:4px;display:none"></div>
     </div>
-    <div class="popup-row">Sport: <span>${escapeHtml(p.sport_type)}</span></div>
+    <div class="popup-row" style="display:flex;align-items:center;gap:4px">
+      Sport: <span id="activity-type-text">${escapeHtml(p.sport_type)}</span>
+      <button class="btn-icon" onclick="startEditType()" title="Change type">✏</button>
+    </div>
+    <div id="type-edit-row" style="display:none;margin-bottom:8px">
+      <select id="type-edit-select" style="width:100%;background:#0d1626;border:1px solid #0f3460;color:#e0e0e0;padding:4px 6px;border-radius:4px;font-size:0.78rem;margin-bottom:5px">
+        ${["Run","TrailRun","Ride","MountainBikeRide","GravelRide","Swim","Walk","Hike","AlpineSki","NordicSki","Kayaking","Rowing","Workout","VirtualRide","VirtualRun"].map(t=>`<option value="${t}"${t===p.sport_type?" selected":""}>${t}</option>`).join("")}
+      </select>
+      <div style="display:flex;gap:5px">
+        <button class="btn-primary" onclick="saveActivityType()" style="flex:1;font-size:0.75rem;padding:4px 6px">Push to Strava</button>
+        <button class="btn-secondary" onclick="cancelEditType()" style="font-size:0.75rem;padding:4px 8px">Cancel</button>
+      </div>
+      <div id="type-edit-msg" style="font-size:0.72rem;margin-top:4px;display:none"></div>
+    </div>
     <div class="popup-row">Date: <span>${p.start_date ? p.start_date.slice(0, 10) : ""}</span></div>
     <div class="popup-row">Distance: <span>${p.distance_km} km</span>${avgSpeedKmh ? `<span class="popup-dim">· ${avgSpeedKmh} km/h</span>` : ""}</div>
     ${pace ? `<div class="popup-row">Pace: <span>${pace}</span></div>` : ""}
@@ -1758,6 +2030,113 @@
       function cancelEditName() {
         document.getElementById("name-edit-row").style.display = "none";
         document.getElementById("name-edit-msg").style.display = "none";
+      }
+
+      function startEditType() {
+        document.getElementById("type-edit-row").style.display = "block";
+        document.getElementById("type-edit-select").focus();
+      }
+
+      function cancelEditType() {
+        document.getElementById("type-edit-row").style.display = "none";
+        document.getElementById("type-edit-msg").style.display = "none";
+      }
+
+      async function saveActivityType() {
+        if (!currentActivityProps) return;
+        const select = document.getElementById("type-edit-select");
+        const newType = select.value;
+        if (!newType) return;
+
+        const msg = document.getElementById("type-edit-msg");
+        const saveBtn = document.querySelector("#type-edit-row .btn-primary");
+        const cancelBtn = document.querySelector("#type-edit-row .btn-secondary");
+        msg.style.display = "none";
+        select.disabled = true;
+        saveBtn.disabled = true;
+        cancelBtn.disabled = true;
+        saveBtn.textContent = "Pushing…";
+
+        let respData = null;
+        let errorText = null;
+        try {
+          const resp = await fetch(`/api/activity/${currentActivityProps.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sport_type: newType }),
+          });
+          if (resp.ok) {
+            respData = await resp.json();
+          } else {
+            const body = await resp.json().catch(() => ({}));
+            errorText = body.error || `Error ${resp.status}`;
+          }
+        } catch (e) {
+          errorText = "Network error";
+        } finally {
+          select.disabled = false;
+          saveBtn.disabled = false;
+          cancelBtn.disabled = false;
+          saveBtn.textContent = "Push to Strava";
+        }
+
+        msg.style.display = "block";
+        if (respData) {
+          const actualType = respData.sport_type;
+          const newColor = respData.color;
+
+          // Update stats panel text
+          document.getElementById("activity-type-text").textContent = actualType;
+          currentActivityProps = { ...currentActivityProps, sport_type: actualType, color: newColor };
+
+          // Update the route line color and sport_type on the map layer
+          const layer = layerById[currentActivityProps.id];
+          if (layer) {
+            layer.setStyle({ color: newColor, weight: 4, opacity: 0.9 });
+            if (layer.feature) {
+              layer.feature.properties.sport_type = actualType;
+              layer.feature.properties.color = newColor;
+            }
+          }
+
+          // Update sidebar dot color
+          const dot = document.querySelector(`.activity-item[data-id="${currentActivityProps.id}"] .activity-dot`);
+          if (dot) dot.style.background = newColor;
+
+          // Update allFeatures so filters and legend reflect the change
+          const feat = allFeatures.find((f) => f.properties.id === currentActivityProps.id);
+          if (feat) {
+            feat.properties.sport_type = actualType;
+            feat.properties.color = newColor;
+          }
+
+          // Rebuild type dropdown from updated allFeatures (preserving selection)
+          const typeSelectEl = document.getElementById("filter-type");
+          const savedType = typeSelectEl.value;
+          const types = [...new Set(allFeatures.map((f) => f.properties.sport_type).filter(Boolean))].sort();
+          typeSelectEl.textContent = "";
+          const allOpt2 = document.createElement("option");
+          allOpt2.value = ""; allOpt2.textContent = "All types";
+          typeSelectEl.appendChild(allOpt2);
+          types.forEach((t) => {
+            const opt = document.createElement("option");
+            opt.value = t; opt.textContent = t;
+            if (t === savedType) opt.selected = true;
+            typeSelectEl.appendChild(opt);
+          });
+
+          // Re-apply type filter so sidebar, stats, and map stay consistent
+          applyTypeFilter();
+          buildLegend(allFeatures);
+
+          document.getElementById("type-edit-row").style.display = "none";
+          msg.textContent = "Type updated on Strava.";
+          msg.style.color = "#2ecc71";
+          setTimeout(() => { msg.style.display = "none"; }, 3000);
+        } else {
+          msg.textContent = errorText || "Failed to update type.";
+          msg.style.color = "#e74c3c";
+        }
       }
 
       async function saveActivityName() {
@@ -1942,11 +2321,13 @@
         const sidebar = document.getElementById("sidebar");
         const toggle = document.getElementById("sidebar-toggle");
         const mapEl = document.getElementById("map");
+        const layerControl = document.getElementById("map-layer-control");
 
         sidebar.classList.toggle("collapsed", sidebarCollapsed);
         mapEl.style.left = sidebarCollapsed ? "0" : "280px";
         toggle.style.left = sidebarCollapsed ? "0" : "280px";
         toggle.textContent = sidebarCollapsed ? "▶" : "◀";
+        layerControl.style.left = sidebarCollapsed ? "10px" : "290px";
 
         // Leaflet needs to know the map size changed
         setTimeout(() => map && map.invalidateSize(), 260);
@@ -2026,6 +2407,8 @@
         document.getElementById("filter-to").value = "";
         document.getElementById("filter-country").value = "";
         document.getElementById("filter-city").value = "";
+        document.getElementById("filter-type").value = "";
+        currentTypeFilter = "";
         loadCities(); // repopulate cities without country constraint
         loadRoutes();
       }
@@ -2240,12 +2623,61 @@
       }
 
       function buildCoachSystemPrompt() {
-        let prompt =
-          "You are an experienced endurance sports coach specializing in training data analysis. " +
-          "You review athletes' Strava activities and provide evidence-based feedback on training load, " +
-          "recovery, pace trends, and progression. Reference specific workouts and metrics. Be concise, practical, and encouraging.";
-        if (activityContext) prompt += `\n\n${activityContext}`;
-        if (coachNotes) prompt += `\n\nLong-term coaching notes:\n${coachNotes}`;
+        let prompt = `You are Coach Alex, an elite endurance sports coach with 20+ years of experience coaching amateur and professional athletes across running, cycling, triathlon, hiking, and swimming. You have deep expertise in exercise physiology and data-driven training.
+
+## Your Coaching Philosophy
+- 80/20 polarized training: ~80% of volume in low intensity (Z1-Z2), ~20% in high intensity (Z4-Z5). Avoid the "grey zone" (Z3) for most sessions.
+- Progressive overload: increase weekly volume by no more than 10% to prevent injury.
+- Periodization: structure training into Base (aerobic foundation), Build (intensity & volume), Peak (race-specific sharpening), and Taper (fatigue reduction before events) phases.
+- Recovery is training: adaptation happens during rest. Flag signs of overtraining (elevated resting HR, declining performance, mood changes).
+
+## Heart Rate Zone Framework (% of max HR)
+- Z1 (Recovery): <60% — active recovery, promotes blood flow
+- Z2 (Aerobic Base): 60-70% — fat oxidation, aerobic enzyme development, the engine of endurance
+- Z3 (Tempo): 70-80% — "comfortably hard", limited use in polarized model
+- Z4 (Threshold): 80-90% — lactate threshold training, improves speed at threshold
+- Z5 (VO2max / Anaertic): 90-100% — short intervals, recruits fast-twitch fibers
+
+When HR zone data is available, assess whether the athlete is spending too much time in Z3 (junk miles) vs the ideal Z2/Z4-Z5 split.
+
+## Training Load & Recovery
+- Suffer Score (Strava): relative perceived exertion proxy. >100 is hard, >200 is very hard.
+- Chronic Training Load (CTL): ~42-day rolling average — fitness base. Build slowly.
+- Acute Training Load (ATL): ~7-day rolling average — fatigue. Spikes indicate overreaching.
+- Training Stress Balance (TSB = CTL - ATL): positive = fresh/undertrained, negative = fatigued/fit. Race-ready: TSB -10 to +5.
+- Weekly load progression: flag any week with >15% volume jump as injury risk.
+
+## Sport-Specific Knowledge
+**Running:**
+- Easy pace should feel conversational; most runners run easy days too fast.
+- Key workouts: long slow distance (LSD), tempo runs, VO2max intervals (e.g. 4×1km at 5km pace), strides.
+- Cadence: ~170-180 spm optimal for most runners; low cadence (<160) increases injury risk.
+- Elevation: +100m ≈ +6% effort; adjust pace expectations accordingly.
+
+**Cycling:**
+- Power zones (if available) are more precise than HR. FTP-based zones preferred.
+- Weighted Average Power (WAP/NP) vs Average Power gap indicates ride variability.
+- Kilojoules ≈ calories for cycling (roughly 1 kJ = 1 kcal at ~25% efficiency).
+- Cadence: 85-95 rpm optimal for road cycling; lower for strength/climbing.
+
+**Hiking / Trail Running:**
+- Use elapsed vs moving time ratio to assess terrain difficulty.
+- Elevation gain is the primary load driver; normalize distance by vert.
+
+**Swimming:**
+- Critical Swim Speed (CSS) is the equivalent of lactate threshold.
+
+## How You Respond
+- Always reference the athlete's ACTUAL data (specific activity names, dates, distances, HR, load scores).
+- Lead with the most important insight, not a summary of what you can see.
+- Be direct and specific: "Your Z3 time was 45% last week — reduce this" beats "try to vary your intensity."
+- Flag injury risk proactively if you see rapid volume spikes or consecutive hard days.
+- When the athlete asks a question, answer it first, then add relevant context.
+- Keep responses concise: bullet points for multiple recommendations, prose for analysis.
+- Use the athlete's preferred sports vocabulary (km not miles unless they use miles).`;
+
+        if (activityContext) prompt += `\n\n---\n## Athlete's Training Data\n${activityContext}`;
+        if (coachNotes) prompt += `\n\n---\n## Accumulated Coaching Notes\n${coachNotes}`;
         return prompt;
       }
 
