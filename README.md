@@ -1,108 +1,230 @@
 # strava2earth
 
-A self-hosted web app that pulls your Strava activities and displays every GPS route on an interactive map. Filter by date range, country, city, and activity type. Click any route or sidebar item to zoom in and inspect details.
+A self-hosted tool that pulls your Strava activities and displays every GPS route on an interactive map. Available as a **web app** (Flask + Leaflet) and a **standalone Android app** (React Native + MapLibre). No third-party accounts or cloud services required beyond your own Strava API credentials.
 
 ![Map view showing activity routes on OpenStreetMap](https://raw.githubusercontent.com/nonmean/strava2earth/main/docs/screenshot.png)
 
+---
+
+## Clients
+
+| Client  | Stack                             | Details              |
+| ------- | --------------------------------- | -------------------- |
+| Web     | Flask · Leaflet.js · vanilla JS   | [Web setup](#web)    |
+| Android | React Native · MapLibre · Zustand | [Android setup](#android) |
+
+Both clients share the same Strava API credentials and feature set. The Android app runs entirely on-device — no server is required.
+
+---
+
 ## Features
 
-- **Interactive map** — all your GPS routes rendered on a choice of background maps (no API key, no cost)
-- **Multiple background maps** — switch between OpenStreetMap, Topographic (with isoheight contour lines), CartoDB Dark, and Esri Satellite via the bottom-left control
-- **Activity sidebar** — scrollable list sorted newest-first with search, synced to map selection
-- **Filters** — date range, country, city, and activity type dropdowns; results update immediately; type filter hides non-matching routes on the map in real time
-- **Click to focus** — click a sidebar item or a route to zoom the map and isolate that single activity; all other routes are hidden; click again to show all
-- **Draggable stats panel** — activity details (distance, avg speed, pace, moving time, elevation gain, heart rate) float in a panel you can drag anywhere on the map
-- **Rename activities** — click ✏ next to the activity name in the stats panel to edit it and push the change back to Strava
-- **Change activity type** — click ✏ next to the sport type in the stats panel to reassign the type (Run, Ride, Hike, etc.) and sync the change to Strava; the map color and filters update instantly
-- **Elevation profile** — Chart.js panel shows elevation vs. distance for the selected activity; drag it anywhere on the map
-- **UI themes** — switch between four visual styles from the header: General (dark navy), Cyberpunk (neon cyan/magenta), Classical (antique gold serif), and Alp (alpine forest green)
-- **AI coach** — optional DeepSeek integration; when a DeepSeek API key is configured, a chat panel appears with a coaching assistant that has access to your training history, HR zones, and recent activity data (see Privacy below)
-- **Sync New / Sync All** — _Sync New_ fetches the latest activity list and downloads only missing GPS streams; _Sync All_ forces a full re-download of every stream from Strava
-- **Encrypted credentials** — Strava API keys stored with Fernet AES encryption, never readable as plain text
-- **Local cache** — GPS streams cached to `cache/streams/` so Strava's rate limits are respected; sync resumes where it left off
-- **Background sync** — live progress bar while activities download; safe to interrupt and restart
+### Shared
+
+- **Interactive map** — every GPS route rendered as a colour-coded polyline (Run = red, Ride = blue, Hike = green, Ski = purple, …)
+- **Multiple base maps** — switch between Street (OSM), Satellite (Esri), Terrain (Esri Topo), and Dark (CartoDB); no API key needed
+- **Filters** — date range, sport type, country, and city; city list is scoped to the selected country
+- **Select & isolate** — tap or click a route to zoom in and hide all other routes; the selected route is highlighted; deselect to restore all
+- **Activity details** — distance, moving time, elapsed time, elevation gain, avg/max heart rate, city, country; elevation profile chart
+- **Rename activities** — edit the activity name and push the change back to Strava
+- **Change activity type** — reassign sport type (Run, Ride, Hike, …) and sync to Strava; map colour updates immediately
+- **Four UI themes** — Default (dark navy), Cyberpunk (neon), Classical (antique gold), Alp (forest green)
+- **AI coach** — optional DeepSeek chat assistant with access to your training history and HR zones; choose between V4 Flash and V4 Pro models
+- **Background sync** — live progress bar; safe to interrupt; resumes where it left off
+- **Geocoding** — Nominatim reverse-geocodes activity start points to city and country; rate-limited to 1 req/s
+
+### Web only
+
+- **Draggable panels** — stats panel and elevation chart can be repositioned anywhere on the map
+- **Sync New / Sync All** — _Sync New_ skips already-cached streams; _Sync All_ forces a full re-download
+- **Fernet-encrypted credentials** — Strava keys stored with AES-128 encryption on disk
+
+### Android only
+
+- **Standalone** — no server required; all logic runs on-device
+- **Summary polylines** — routes appear on the map immediately from Strava's encoded summary polyline, before full GPS stream data downloads
+- **Android Keystore encryption** — secrets stored via `react-native-encrypted-storage` (hardware-backed on supported devices)
+- **Swipe-to-close panels** — swipe down the handle bar to dismiss the Activities / Coach / Settings sheet
+- **Strava OAuth via Chrome Custom Tab** — uses Android deep-link `strava2earth://auth/callback`; no WebView
+
+---
 
 ## Tech stack
+
+### Web
 
 | Layer      | Tool                                                            |
 | ---------- | --------------------------------------------------------------- |
 | Backend    | Python · Flask                                                  |
-| Map        | Leaflet.js · OpenStreetMap / OpenTopoMap / CartoDB / Esri tiles |
+| Map        | Leaflet.js · OSM / OpenTopoMap / CartoDB / Esri tiles           |
 | Charts     | Chart.js                                                        |
-| Geocoding  | Nominatim (OSM) — free, no key needed                           |
+| Geocoding  | Nominatim (OSM)                                                 |
 | Encryption | `cryptography` (Fernet / AES-128-CBC + HMAC-SHA256)             |
 | Auth       | Strava OAuth 2.0                                                |
 | AI coach   | DeepSeek API (optional)                                         |
 
+### Android
+
+| Layer        | Tool                                                          |
+| ------------ | ------------------------------------------------------------- |
+| Framework    | React Native 0.85 · TypeScript                                |
+| Map          | MapLibre React Native v11                                     |
+| Tiles        | OSM · Esri World Imagery · Esri World Topo · CartoDB Dark     |
+| State        | Zustand                                                       |
+| Storage      | `react-native-fs` (cache) · `react-native-encrypted-storage` |
+| OAuth        | Chrome Custom Tabs via `react-native-inappbrowser-reborn`     |
+| Geocoding    | Nominatim (OSM)                                               |
+| AI coach     | DeepSeek API (optional)                                       |
+| Charts       | `react-native-chart-kit`                                      |
+
+---
+
 ## Setup
 
-### 1. Create a Strava API app
+### Strava API app (required for both clients)
 
 1. Go to [strava.com/settings/api](https://www.strava.com/settings/api)
-2. Create an app (any name/website)
-3. Set **Authorization Callback Domain** to `localhost`
+2. Create an app (any name / website)
+3. Set **Authorization Callback Domain**:
+   - Web: `localhost`
+   - Android: `auth`
 4. Note your **Client ID** and **Client Secret**
 
-### 2. Install dependencies
+---
+
+<a name="web"></a>
+### Web
+
+#### Install
 
 ```bash
-pip install -r requirements.txt
+pip install -r web/requirements.txt
 ```
 
-### 3. Run
+#### Run
 
 ```bash
-python app.py
+python web/run.py
 ```
 
 Open [http://localhost:5001](http://localhost:5001).
 
-### 4. First-time flow
+#### First-time flow
 
-1. **Setup** — enter your Strava Client ID, Secret, an optional Nominatim contact email, and an optional DeepSeek API key (all stored encrypted on disk)
-2. **Connect** — click _Connect with Strava_ to authorize via OAuth; you can also set or update the contact email from this page
-3. **Sync** — click _Sync New_ to fetch your activity list and download GPS streams; use _Sync All_ to force a full re-download
-4. **Explore** — use the date / country / city / type filters and the sidebar to navigate your routes
+1. **Setup** — enter Strava Client ID, Secret, optional Nominatim contact email, and optional DeepSeek API key
+2. **Connect** — click _Connect with Strava_ to complete OAuth
+3. **Sync** — click _Sync New_ to fetch activities; _Sync All_ to force full re-download
+4. **Explore** — use filters and the sidebar to navigate your routes
 
-Sync runs in the background. You can start browsing cached activities immediately while the rest download.
+---
+
+<a name="android"></a>
+### Android
+
+#### Prerequisites
+
+- Android SDK + platform-tools
+- Java 17+
+- Node 18+
+- A connected Android device or emulator
+
+#### Build and install
+
+```bash
+cd android
+npm install
+
+# Terminal 1 — Metro bundler
+npx react-native start --port 8081
+
+# Terminal 2 — build and install
+JAVA_HOME=/path/to/jdk npx react-native run-android
+
+# Physical device — forward Metro port
+adb reverse tcp:8081 tcp:8081
+```
+
+#### First-time flow in the app
+
+1. Open the app — you will see the credential setup screen
+2. Enter **Strava Client ID**, **Client Secret**, optional **OSM contact email**, and optional **DeepSeek API key**
+3. Tap **Connect with Strava** — a Chrome Custom Tab opens; after authorising, the tab closes and you land on the map
+4. Tap **Sync** to download your activity list and GPS streams
+
+Routes appear immediately from summary polylines. Full GPS data (elevation, heart rate) downloads in the background.
+
+---
 
 ## Project layout
 
 ```
 strava2earth/
-├── app.py            # Flask server, API routes
-├── auth.py           # Strava OAuth token management
-├── credentials.py    # Fernet-encrypted credential storage
-├── fetch.py          # Strava API client + local cache
-├── config.py         # Paths, constants, sport color mapping
-├── static/
-│   └── index.html    # Single-file frontend (Leaflet + vanilla JS)
-├── cache/            # Runtime data — gitignored
-│   ├── .key          # Fernet encryption key (auto-generated)
+├── shared/                       # Pure Python business logic
+│   ├── config.py                 # Paths, constants, sport colours
+│   ├── credentials.py            # Fernet-encrypted credential storage
+│   ├── strava_client.py          # Outbound Strava API calls
+│   ├── cache_manager.py          # Activity cache, sync, GeoJSON queries
+│   └── geocoding.py              # Nominatim reverse geocode
+├── web/                          # Flask web app
+│   ├── app.py                    # API routes
+│   ├── auth.py                   # OAuth token management
+│   ├── run.py                    # Launch script
+│   ├── requirements.txt
+│   └── static/
+│       └── index.html            # Single-file frontend (Leaflet + JS)
+├── android/                      # React Native Android app
+│   ├── src/
+│   │   ├── App.tsx               # Root navigator, startup auth restore
+│   │   ├── screens/
+│   │   │   ├── LoginScreen.tsx   # Credential setup + Strava OAuth
+│   │   │   ├── MainScreen.tsx    # Map + bottom sheet (Activities / Coach / Settings)
+│   │   │   └── ActivityDetailScreen.tsx
+│   │   ├── services/
+│   │   │   ├── secureStorage.ts  # Android Keystore wrapper
+│   │   │   ├── stravaAuth.ts     # OAuth flow, token refresh
+│   │   │   ├── stravaApi.ts      # Strava REST API
+│   │   │   ├── cacheManager.ts   # Cache, sync, GeoJSON queries
+│   │   │   ├── geocoding.ts      # Nominatim
+│   │   │   └── deepseek.ts       # DeepSeek chat API
+│   │   ├── stores/
+│   │   │   └── appStore.ts       # Zustand: auth, sync, theme, base map
+│   │   └── components/
+│   └── android/                  # Native Gradle project
+├── cache/                        # Runtime data — gitignored
+│   ├── .key
 │   ├── credentials.enc
 │   ├── token.json
 │   ├── activities.json
-│   ├── memory_context.json  # AI coach conversation history
-│   └── streams/      # One JSON file per activity
-└── requirements.txt
+│   └── streams/
+└── pyproject.toml
 ```
 
-## Cache and privacy
+---
 
-All activity data stays local. The only outbound connections are:
+## Privacy
 
-- **Strava API** — to fetch your activities and push name/type edits
-- **Map tile providers** — OpenStreetMap, OpenTopoMap, CartoDB, or Esri depending on your background map choice
-- **Nominatim (OSM)** — reverse-geocoding the start point of each activity to determine city and country
-- **DeepSeek API** _(only if a key is configured)_ — when the AI coach is active, activity summaries including names, dates, distances, heart rate data, and training load scores are sent to DeepSeek's API for analysis. This data leaves your machine. If you do not enter a DeepSeek key, no data is sent to any AI service.
+All activity data stays local. Outbound connections:
 
-The encryption key (`cache/.key`) and encrypted credentials (`cache/credentials.enc`) are generated locally on first setup. Without the key file, the credentials file cannot be decrypted.
+| Destination | Purpose | Both clients |
+| ----------- | ------- | ------------ |
+| Strava API | Fetch activities, push edits | ✓ |
+| Map tile provider | Render base map (OSM / Esri / CartoDB) | ✓ |
+| Nominatim (OSM) | Reverse-geocode activity start points | ✓ |
+| DeepSeek API | AI coach responses — only if a key is configured | ✓ |
 
-Clicking **Delete credential** or saving new credentials wipes the OAuth token and all cached activity data (`activities.json` and `streams/`). A fresh sync is required after reconnecting.
+When the AI coach is active, activity summaries (names, dates, distances, heart rate) are sent to DeepSeek. If you do not enter a DeepSeek key, no data is sent to any AI service.
+
+**Web:** credentials are Fernet-encrypted on disk; deleting `cache/` removes everything.  
+**Android:** secrets live in Android Keystore; tap _Delete credentials & cache_ in Settings to wipe everything.
+
+---
 
 ## Rate limits
 
-Strava allows 100 requests per 15 minutes and 1 000 per day. The sync sleeps 0.5 s between stream fetches and skips activities that are already cached, so large accounts sync cleanly over multiple sessions.
+Strava: 100 requests per 15 minutes, 1 000 per day. The sync sleeps 0.5 s between stream fetches and skips already-cached activities.  
+Nominatim: the sync enforces a 1 req/s delay to comply with OSM usage policy.
+
+---
 
 ## License
 

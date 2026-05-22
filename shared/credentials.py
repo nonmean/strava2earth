@@ -11,10 +11,10 @@ import json
 import stat
 from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
+from shared.config import CACHE_DIR
 
-_BASE = Path(__file__).parent / "cache"
-_KEY_FILE = _BASE / ".key"
-_CREDS_FILE = _BASE / "credentials.enc"
+_KEY_FILE = CACHE_DIR / ".key"
+_CREDS_FILE = CACHE_DIR / "credentials.enc"
 
 
 def _secure_write(path: Path, data: bytes):
