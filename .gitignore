@@ -7,3 +7,12 @@ update_suggestions.md
 update_suggestions_codex.md
 idea/
 review/
+*.egg-info/
+
+# Android / React Native
+android/node_modules/
+android/.gradle/
+android/android/.gradle/
+android/android/app/build/
+android/android/build/
+android/.bundle/

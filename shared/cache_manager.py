@@ -1,5 +1,5 @@
 """
-Strava data fetcher with local cache.
+Strava data cache manager.
 
 Cache layout:
   cache/activities.json       — full activity list (refreshed every ACTIVITIES_TTL_SECONDS)
@@ -10,78 +10,41 @@ import os
 import threading
 import time
 import requests
-from config import (
+from shared.config import (
     CACHE_DIR, STREAMS_DIR, ACTIVITIES_FILE, ACTIVITIES_TTL_SECONDS,
-    STRAVA_API_BASE, get_osm_user_agent
+    SPORT_COLORS, DEFAULT_COLOR,
 )
-import auth
+from shared import strava_client, geocoding
 
 _sync_lock = threading.Lock()
 _sync_state = {"running": False, "total": 0, "done": 0, "errors": 0, "last_error": ""}
 
 
-def _headers():
-    token = auth.get_valid_token()
-    if not token:
-        raise RuntimeError("Not authenticated")
-    return {"Authorization": f"Bearer {token}"}
-
-
 # ── Activity list ────────────────────────────────────────────────────────────
 
-def _get_athlete_id():
-    """Return the authenticated athlete's integer ID from the stored token."""
-    token = auth.load_token()
-    if not token:
-        raise RuntimeError("Not authenticated")
-    athlete = token.get("athlete", {})
+def _get_athlete_id(token_data: dict) -> int:
+    """Return the authenticated athlete's integer ID from the token dict."""
+    athlete = token_data.get("athlete", {})
     athlete_id = athlete.get("id")
     if not athlete_id:
         raise RuntimeError("Athlete ID not found in token — try logging out and reconnecting.")
     return int(athlete_id)
 
 
-def _fetch_all_activities(athlete_id):
-    """Paginate through all activities from the Strava API, keeping only those owned by athlete_id."""
-    activities = []
-    page = 1
-    skipped = 0
-    while True:
-        resp = requests.get(
-            f"{STRAVA_API_BASE}/athlete/activities",
-            headers=_headers(),
-            params={"per_page": 200, "page": page},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        batch = resp.json()
-        if not batch:
-            break
-        for a in batch:
-            if int(a.get("athlete", {}).get("id", 0)) == athlete_id:
-                activities.append(a)
-            else:
-                skipped += 1
-                print(f"Skipped activity {a.get('id')} — belongs to athlete {a.get('athlete', {}).get('id')}, not {athlete_id}")
-        page += 1
-        time.sleep(0.3)
-    if skipped:
-        print(f"Warning: {skipped} activities skipped (wrong athlete ID)")
-    return activities
-
-
-def _activities_stale():
+def _activities_stale() -> bool:
     if not ACTIVITIES_FILE.exists():
         return True
     age = time.time() - os.path.getmtime(ACTIVITIES_FILE)
     return age > ACTIVITIES_TTL_SECONDS
 
 
-def load_activities(force=False):
-    """Load activity list from cache, refreshing if stale or forced."""
+def load_activities(access_token: str, token_data: dict = None, force: bool = False) -> list:
+    """Load activity list from cache, refreshing from Strava if stale or forced."""
     if force or _activities_stale():
-        athlete_id = _get_athlete_id()
-        raw = _fetch_all_activities(athlete_id)
+        if token_data is None:
+            raise RuntimeError("token_data required to refresh activities")
+        athlete_id = _get_athlete_id(token_data)
+        raw = strava_client.fetch_all_activities(access_token, athlete_id)
         slim = []
         for a in raw:
             slim.append({
@@ -123,7 +86,7 @@ def _stream_path(activity_id):
     return STREAMS_DIR / f"{activity_id}.json"
 
 
-def _stream_cached(activity_id):
+def _stream_cached(activity_id) -> bool:
     p = _stream_path(activity_id)
     if not p.exists():
         return False
@@ -133,26 +96,6 @@ def _stream_cached(activity_id):
         return bool(data.get("latlng"))
     except (json.JSONDecodeError, OSError):
         return False
-
-
-def _fetch_stream(activity_id):
-    resp = requests.get(
-        f"{STRAVA_API_BASE}/activities/{activity_id}/streams",
-        headers=_headers(),
-        params={"keys": "latlng,altitude,distance,heartrate,velocity_smooth", "key_by_type": "true"},
-        timeout=30,
-    )
-    if resp.status_code == 404:
-        return None
-    resp.raise_for_status()
-    data = resp.json()
-    return {
-        "latlng": data.get("latlng", {}).get("data", []),
-        "altitude": data.get("altitude", {}).get("data", []),
-        "distance": data.get("distance", {}).get("data", []),
-        "heartrate": data.get("heartrate", {}).get("data", []),
-        "velocity_smooth": data.get("velocity_smooth", {}).get("data", []),
-    }
 
 
 def _compute_hr_zones(heartrate_data, max_hr=None):
@@ -175,36 +118,6 @@ def _compute_hr_zones(heartrate_data, max_hr=None):
     return {f"z{i+1}": round(c / total * 100) for i, c in enumerate(counts)}
 
 
-def _reverse_geocode(lat, lng):
-    """Best-effort city+country lookup via Nominatim. Returns (city, country) tuple."""
-    try:
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/reverse",
-            params={"lat": lat, "lon": lng, "format": "json"},
-            headers={"User-Agent": get_osm_user_agent()},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            address = resp.json().get("address", {})
-            city = (
-                address.get("city") or address.get("town") or
-                address.get("village") or address.get("hamlet") or ""
-            )
-            country = address.get("country", "")
-            return city, country
-    except requests.RequestException as e:
-        print(f"Warning: reverse geocode failed for ({lat}, {lng}): {e}")
-    return "", ""
-
-
-def _downsample(points, max_points=500):
-    """Keep at most max_points evenly-spaced points."""
-    if len(points) <= max_points:
-        return points
-    step = len(points) / max_points
-    return [points[int(i * step)] for i in range(max_points)]
-
-
 def _downsample_streams(latlng, altitude, distance, max_points=500):
     """Downsample latlng, altitude, and distance arrays together at the same indices."""
     n = len(latlng)
@@ -218,7 +131,7 @@ def _downsample_streams(latlng, altitude, distance, max_points=500):
     return ds_latlng, ds_alt, ds_dist
 
 
-def fetch_stream_for_activity(activity):
+def fetch_stream_for_activity(access_token: str, activity: dict):
     """Fetch and cache GPS stream for a single activity. Returns stream dict or None."""
     aid = activity["id"]
     if _stream_cached(aid):
@@ -227,7 +140,7 @@ def fetch_stream_for_activity(activity):
     if not activity.get("start_latlng"):
         return None  # no GPS
 
-    stream_data = _fetch_stream(aid)
+    stream_data = strava_client.fetch_stream(access_token, aid)
     if not stream_data or not stream_data["latlng"]:
         return None
 
@@ -239,7 +152,7 @@ def fetch_stream_for_activity(activity):
     city = activity.get("location_city", "")
     if (not country or not city) and latlng:
         lat, lng = latlng[0]
-        geo_city, geo_country = _reverse_geocode(lat, lng)
+        geo_city, geo_country = geocoding.reverse_geocode(lat, lng)
         if not country:
             country = geo_country
         if not city:
@@ -290,7 +203,7 @@ def fetch_stream_for_activity(activity):
 
 # ── Sync orchestration ───────────────────────────────────────────────────────
 
-def try_start_sync():
+def try_start_sync() -> bool:
     """Atomically mark sync as running. Returns True if started, False if already running."""
     with _sync_lock:
         if _sync_state["running"]:
@@ -301,16 +214,16 @@ def try_start_sync():
         return True
 
 
-def sync(force_streams=False):
+def sync(access_token: str, token_data: dict, force_streams: bool = False):
     """
     Main sync function — call in a background thread.
     Always re-fetches the activity list from Strava to catch new activities.
     If force_streams=True, re-downloads all GPS streams (wipes existing cache).
     """
-    global _route_data_mtime
+    global _route_data, _route_data_mtime
 
     try:
-        activities = load_activities(force=True)
+        activities = load_activities(access_token, token_data, force=True)
         gps_activities = [a for a in activities if a.get("start_latlng")]
         initial_done = 0 if force_streams else sum(
             1 for a in gps_activities if _stream_cached(a["id"])
@@ -320,8 +233,6 @@ def sync(force_streams=False):
             _sync_state["done"] = initial_done
 
         if force_streams:
-            # Invalidate in-memory cache before wiping files
-            global _route_data, _route_data_mtime
             _route_data = []
             _route_data_mtime = 0.0
 
@@ -333,7 +244,7 @@ def sync(force_streams=False):
             elif _stream_cached(activity["id"]):
                 continue
             try:
-                fetch_stream_for_activity(activity)
+                fetch_stream_for_activity(access_token, activity)
                 with _sync_lock:
                     _sync_state["done"] += 1
             except requests.RequestException as e:
@@ -359,22 +270,18 @@ def sync(force_streams=False):
             _sync_state["running"] = False
 
 
-def update_activity_name(activity_id, new_name):
-    """Push a renamed activity to Strava and update local cache. Returns the saved name."""
-    resp = requests.put(
-        f"{STRAVA_API_BASE}/activities/{activity_id}",
-        headers=_headers(),
-        json={"name": new_name},
-        timeout=15,
-    )
-    if resp.status_code == 403:
-        raise PermissionError(
-            "Missing activity:write permission — please logout and reconnect to Strava"
-        )
-    resp.raise_for_status()
-    actual_name = resp.json().get("name", new_name)
+def sync_status() -> dict:
+    with _sync_lock:
+        return dict(_sync_state)
 
-    # Update stream cache file
+
+# ── Activity mutations ───────────────────────────────────────────────────────
+
+def update_activity_name(access_token: str, activity_id: int, new_name: str) -> str:
+    """Push a renamed activity to Strava and update local cache. Returns the saved name."""
+    result = strava_client.update_activity(access_token, activity_id, name=new_name)
+    actual_name = result.get("name", new_name)
+
     path = _stream_path(activity_id)
     if path.exists():
         try:
@@ -386,7 +293,6 @@ def update_activity_name(activity_id, new_name):
         except (json.JSONDecodeError, OSError):
             pass
 
-    # Update activities.json
     if ACTIVITIES_FILE.exists():
         try:
             with open(ACTIVITIES_FILE) as f:
@@ -400,32 +306,17 @@ def update_activity_name(activity_id, new_name):
         except (json.JSONDecodeError, OSError):
             pass
 
-    # Invalidate in-memory route cache
     global _route_data_mtime
     _route_data_mtime = 0.0
-
     return actual_name
 
 
-def update_activity_sport_type(activity_id, sport_type):
-    """Push a sport_type change to Strava and update local cache. Returns the saved sport_type."""
-    from config import SPORT_COLORS, DEFAULT_COLOR
-
-    resp = requests.put(
-        f"{STRAVA_API_BASE}/activities/{activity_id}",
-        headers=_headers(),
-        json={"sport_type": sport_type},
-        timeout=15,
-    )
-    if resp.status_code == 403:
-        raise PermissionError(
-            "Missing activity:write permission — please logout and reconnect to Strava"
-        )
-    resp.raise_for_status()
-    actual_sport_type = resp.json().get("sport_type", sport_type)
+def update_activity_sport_type(access_token: str, activity_id: int, sport_type: str) -> tuple:
+    """Push a sport_type change to Strava and update local cache. Returns (sport_type, color)."""
+    result = strava_client.update_activity(access_token, activity_id, sport_type=sport_type)
+    actual_sport_type = result.get("sport_type", sport_type)
     new_color = SPORT_COLORS.get(actual_sport_type, DEFAULT_COLOR)
 
-    # Update stream cache file
     path = _stream_path(activity_id)
     if path.exists():
         try:
@@ -437,7 +328,6 @@ def update_activity_sport_type(activity_id, sport_type):
         except (json.JSONDecodeError, OSError):
             pass
 
-    # Update activities.json
     if ACTIVITIES_FILE.exists():
         try:
             with open(ACTIVITIES_FILE) as f:
@@ -451,64 +341,12 @@ def update_activity_sport_type(activity_id, sport_type):
         except (json.JSONDecodeError, OSError):
             pass
 
-    # Invalidate in-memory route cache
     global _route_data_mtime
     _route_data_mtime = 0.0
-
     return actual_sport_type, new_color
 
 
-def _backfill_cities_nominatim():
-    """
-    For cached streams that still have no location_city after the activities.json
-    merge, call Nominatim reverse geocoding using the first GPS point.
-    Runs at the end of sync() — already on a background thread.
-    """
-    if not STREAMS_DIR.exists():
-        return
-
-    for path in STREAMS_DIR.glob("*.json"):
-        try:
-            with open(path) as f:
-                stream = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            continue
-
-        if (stream.get("location_city") or "").strip():
-            continue  # already has city
-
-        latlng = stream.get("latlng")
-        if not latlng:
-            continue
-
-        lat, lng = latlng[0]
-        geo_city, geo_country = _reverse_geocode(lat, lng)
-        if not geo_city and not geo_country:
-            continue
-
-        if geo_city:
-            stream["location_city"] = geo_city
-        if not (stream.get("location_country") or "").strip() and geo_country:
-            stream["location_country"] = geo_country
-
-        try:
-            with open(path, "w") as f:
-                json.dump(stream, f)
-        except OSError:
-            pass
-
-        time.sleep(1.1)  # Nominatim rate limit: max 1 req/s
-
-
-def sync_status():
-    with _sync_lock:
-        return dict(_sync_state)
-
-
 # ── In-memory route cache ────────────────────────────────────────────────────
-# Avoids re-reading hundreds of stream files on every API request.
-# The cache is keyed by the maximum mtime across all stream files; any new
-# file written by sync() will bump the mtime and trigger a reload.
 
 _route_data: list = []
 _route_data_mtime: float = 0.0
@@ -551,8 +389,6 @@ def _enrich_cities(streams: list) -> list:
     """
     For streams missing location_city, pull the value from activities.json
     (Strava-provided city) and write it back to the stream file on disk.
-    Streams still missing city after this pass will be filled by Nominatim
-    during the next sync().
     """
     if not ACTIVITIES_FILE.exists():
         return streams
@@ -582,18 +418,54 @@ def _enrich_cities(streams: list) -> list:
     return enriched
 
 
+def _backfill_cities_nominatim():
+    """
+    For cached streams that still have no location_city after the activities.json
+    merge, call Nominatim reverse geocoding using the first GPS point.
+    """
+    if not STREAMS_DIR.exists():
+        return
+
+    for path in STREAMS_DIR.glob("*.json"):
+        try:
+            with open(path) as f:
+                stream = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        if (stream.get("location_city") or "").strip():
+            continue
+
+        latlng = stream.get("latlng")
+        if not latlng:
+            continue
+
+        lat, lng = latlng[0]
+        geo_city, geo_country = geocoding.reverse_geocode(lat, lng)
+        if not geo_city and not geo_country:
+            continue
+
+        if geo_city:
+            stream["location_city"] = geo_city
+        if not (stream.get("location_country") or "").strip() and geo_country:
+            stream["location_country"] = geo_country
+
+        try:
+            with open(path, "w") as f:
+                json.dump(stream, f)
+        except OSError:
+            pass
+
+        time.sleep(1.1)  # Nominatim rate limit: max 1 req/s
+
+
 # ── Query cache for routes ───────────────────────────────────────────────────
 
-def get_routes(from_date=None, to_date=None, country=None, city=None):
-    """
-    Return a GeoJSON FeatureCollection from the in-memory route cache,
-    filtered by date range, country, and city.
-    """
-    from config import SPORT_COLORS, DEFAULT_COLOR
-
+def get_routes(from_date=None, to_date=None, country=None, city=None) -> dict:
+    """Return a GeoJSON FeatureCollection filtered by date, country, city."""
     features = []
     for stream in _load_route_data():
-        start_date = stream.get("start_date", "")[:10]  # YYYY-MM-DD
+        start_date = stream.get("start_date", "")[:10]
         if from_date and start_date < from_date:
             continue
         if to_date and start_date > to_date:
@@ -607,8 +479,7 @@ def get_routes(from_date=None, to_date=None, country=None, city=None):
         if city and city.lower() not in stream_city.lower():
             continue
 
-        # GeoJSON requires [lng, lat] — Strava gives [lat, lng]
-        coords = [[pt[1], pt[0]] for pt in stream["latlng"]]
+        coords = [[pt[1], pt[0]] for pt in stream["latlng"]]  # [lng, lat] for GeoJSON
 
         sport = stream.get("sport_type", "Other")
         color = SPORT_COLORS.get(sport, DEFAULT_COLOR)
@@ -637,26 +508,28 @@ def get_routes(from_date=None, to_date=None, country=None, city=None):
     return {"type": "FeatureCollection", "features": features}
 
 
-def get_countries():
+def get_countries() -> list:
     """Return sorted list of unique countries present in the in-memory cache."""
     countries = {(s.get("location_country") or "").strip() for s in _load_route_data()}
     countries.discard("")
     return sorted(countries)
 
 
-def clear_cache():
-    """Delete all cached activity and stream data."""
-    global _route_data, _route_data_mtime
-    if ACTIVITIES_FILE.exists():
-        ACTIVITIES_FILE.unlink()
-    if STREAMS_DIR.exists():
-        for p in STREAMS_DIR.glob("*.json"):
-            p.unlink()
-    _route_data = []
-    _route_data_mtime = 0.0
+def get_cities(country=None) -> list:
+    """Return sorted list of unique cities, optionally filtered to a country."""
+    cities = set()
+    for s in _load_route_data():
+        if country:
+            stream_country = (s.get("location_country") or "").strip()
+            if country.lower() not in stream_country.lower():
+                continue
+        city = (s.get("location_city") or "").strip()
+        if city:
+            cities.add(city)
+    return sorted(cities)
 
 
-def get_stream(activity_id):
+def get_stream(activity_id: int):
     """Return the cached stream dict for a single activity, or None if not cached."""
     path = _stream_path(activity_id)
     if not path.exists():
@@ -668,13 +541,11 @@ def get_stream(activity_id):
         return None
 
 
-def get_activity_stats():
+def get_activity_stats(access_token: str = None, token_data: dict = None) -> list:
     """
     Return per-activity stats for the coach context: merges activities.json fields
-    (suffer_score, watts, cadence) with stream-computed fields (hr_zones, speed).
-    Returns a list of lightweight dicts — no GPS coordinates.
+    with stream-computed fields (hr_zones, speed). No GPS coordinates.
     """
-    # Build a lookup of stream-computed fields keyed by activity id
     stream_extras = {}
     if STREAMS_DIR.exists():
         for path in STREAMS_DIR.glob("*.json"):
@@ -696,7 +567,13 @@ def get_activity_stats():
                 continue
 
     try:
-        activities = load_activities()
+        if ACTIVITIES_FILE.exists():
+            with open(ACTIVITIES_FILE) as f:
+                activities = json.load(f)
+        elif access_token and token_data:
+            activities = load_activities(access_token, token_data)
+        else:
+            return []
     except (RuntimeError, OSError):
         return []
 
@@ -728,15 +605,13 @@ def get_activity_stats():
     return result
 
 
-def get_cities(country=None):
-    """Return sorted list of unique cities, optionally filtered to a country."""
-    cities = set()
-    for s in _load_route_data():
-        if country:
-            stream_country = (s.get("location_country") or "").strip()
-            if country.lower() not in stream_country.lower():
-                continue
-        city = (s.get("location_city") or "").strip()
-        if city:
-            cities.add(city)
-    return sorted(cities)
+def clear_cache():
+    """Delete all cached activity and stream data."""
+    global _route_data, _route_data_mtime
+    if ACTIVITIES_FILE.exists():
+        ACTIVITIES_FILE.unlink()
+    if STREAMS_DIR.exists():
+        for p in STREAMS_DIR.glob("*.json"):
+            p.unlink()
+    _route_data = []
+    _route_data_mtime = 0.0

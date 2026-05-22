@@ -5,7 +5,7 @@ import stat
 import time
 import requests
 from urllib.parse import urlencode
-from config import (
+from shared.config import (
     TOKEN_FILE, STRAVA_TOKEN_URL, STRAVA_AUTH_URL,
     REDIRECT_URI, CACHE_DIR, get_strava_credentials
 )
@@ -79,11 +79,9 @@ def get_valid_token():
     if not token:
         return None
 
-    # Check if access token is still valid (with 60s buffer)
     if token.get("expires_at", 0) > time.time() + 60:
         return token["access_token"]
 
-    # Refresh the token
     client_id, client_secret = get_strava_credentials()
     resp = requests.post(STRAVA_TOKEN_URL, data={
         "client_id": client_id,

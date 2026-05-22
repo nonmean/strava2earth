@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).parent.parent  # strava2earth/ root
 CACHE_DIR = BASE_DIR / "cache"
 STREAMS_DIR = CACHE_DIR / "streams"
 TOKEN_FILE = CACHE_DIR / "token.json"
@@ -55,7 +55,7 @@ def get_strava_credentials():
       2. Environment variables / .env file (dev override)
     Returns (None, None) if not configured.
     """
-    import credentials as creds_store  # imported here to avoid circular init
+    from shared import credentials as creds_store  # lazy to avoid circular init
 
     client_id, client_secret, _, _ds = creds_store.load()
     if client_id and client_secret:
@@ -69,7 +69,7 @@ def get_strava_credentials():
 
 def get_osm_user_agent() -> str:
     """Return the OSM/Nominatim contact string stored in encrypted credentials."""
-    import credentials as creds_store
+    from shared import credentials as creds_store
 
     _, _, osm_ua, _ds = creds_store.load()
     if osm_ua:
